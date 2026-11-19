@@ -1,0 +1,25 @@
+# Local supporting services for Plexsol Business Manager.
+# Neon remains the primary managed PostgreSQL target.
+# This compose file is optional for local-only Postgres when Neon is unavailable.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: plexsol-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: plexsol
+      POSTGRES_PASSWORD: plexsol
+      POSTGRES_DB: plexsol_business_manager
+    volumes:
+      - plexsol_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plexsol -d plexsol_business_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  plexsol_pg_data:
