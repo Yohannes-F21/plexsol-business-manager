@@ -124,7 +124,8 @@ Expected shape:
 - Primary accent: **Plexsol Orange** `#F15A24`
 - Surfaces: white / off-white
 - Typography: charcoal / black
-- Official logo assets: `apps/web/public/brand/`
+- Official logo: `apps/web/public/brand/plexsol_logo.png`
+- Logo policy: use `official` variant on dark surfaces (login); use `light` CSS mark on the white/off-white app shell (PNG includes a baked black background)
 
 ## Database (Phase 2)
 
@@ -141,9 +142,32 @@ pnpm db:test             # financial invariant tests
 
 Seed refuses to run in `production` unless `ALLOW_DB_SEED=true`. It does **not** insert sample clients, payments, or projects.
 
+## Authentication (Phase 3)
+
+- Argon2id passwords, PostgreSQL sessions, httpOnly cookie `plexsol_session`
+- Login rate limiting (default 5 / 15 min per IP+email)
+- Protected API routes under `/api/secure/*` and `/api/auth/me`
+
+```bash
+pnpm db:seed          # writes Argon2id admin hash (SEED_ADMIN_PASSWORD)
+pnpm dev:api
+pnpm dev:web
+pnpm test:api         # auth integration tests
+# Sign in: admin@plexsol.com / value of SEED_ADMIN_PASSWORD
+```
+
 ## Phase status
 
-**Phase 2 — Database & Prisma Schema** (current)
+**Phase 4 — Dashboard UI** (current)
+
+- KPI cards, Recharts overview, attention panel, summaries, transactions, renewals (ETB)
+- Replaceable data layer with labeled development fixtures until `/api/dashboard` exists
+
+**Phase 3 — Authentication & Application Layout** (done)
+
+- Login/logout, session cookies, protected routes, responsive branded shell
+
+**Phase 2 — Database & Prisma Schema** (done)
 
 - Full schema, migration, seed (reference data), financial helpers, automated invariant tests
 
@@ -151,4 +175,4 @@ Seed refuses to run in `production` unless `ALLOW_DB_SEED=true`. It does **not**
 
 - Monorepo tooling, shared packages, Prisma Neon config, health API, worker process, branded frontend shell
 
-Next: authentication & app layout (Phase 3).
+Next: Core modules CRUD (Phase 5).

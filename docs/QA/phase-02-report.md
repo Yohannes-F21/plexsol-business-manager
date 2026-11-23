@@ -3,22 +3,30 @@
 | Field | Value |
 | --- | --- |
 | Phase | Phase 2 — Database & Prisma Schema |
-| Audit date | 2026-11-19 |
+| Initial audit date | 2026-11-19 |
+| Re-verification date | 2026-11-20 |
 | Auditor | Independent QA session (separate from implementation) |
-| Overall result | **NOT READY** |
-| Spec source | Official `docs/roadmap/phase-02.md` was **MISSING**; checklist reconstructed from Phase 2 implementation prompt + README + schema/migration inspection |
+| Overall result | **READY FOR NEXT PHASE** (upgraded from NOT READY after blocker re-check) |
+| Spec source | Official `docs/roadmap/phase-02.md` was **MISSING** at first audit; checklist reconstructed from Phase 2 implementation prompt + README + schema/migration inspection |
 
-## Executive summary
+## Re-verification (2026-11-20)
+
+Blockers reported as fixed by implementation; independently re-checked.
+
+| Defect | Prior severity | Re-check result | Evidence |
+| --- | --- | --- | --- |
+| DEF-P2-01 credentials in `.env.example` | CRITICAL | **RESOLVED** | `packages/database/.env.example` and root `.env.example` use placeholders only; repo grep found no `neondb_owner` / `npg_` / Neon host leftovers in tracked-like sources |
+| DEF-P2-02 flaky FX invariant test | HIGH | **RESOLVED** | Test uses unique `effectiveAt` + cleanup; `pnpm db:test` **9/9 twice** (exit 0 both runs) |
+| DEF-P2-03 Prisma CLI root `.env` | MEDIUM | **OPEN** | `prisma validate` with process `DATABASE_URL` unset still fails P1012 |
+| DEF-P2-04 missing official roadmap specs | MEDIUM | **OPEN** | Placeholders remain |
+
+Gate: all five Phase 2 acceptance criteria now **PASS**; no critical/high defects remain → **READY FOR NEXT PHASE**. Medium items are non-blocking follow-ups.
+
+## Executive summary (initial 2026-11-19)
 
 Phase 2 delivered a substantial Prisma schema, SQL migration with CHECK constraints and allocation triggers, Decimal-based finance helpers, a reference-data seed, and a 9-case financial invariant suite. Schema validation, Prisma Client generation, typecheck, lint, and monorepo build all passed. Migrations are applied on the configured development database.
 
-However, the phase is **NOT READY** because:
-
-1. **CRITICAL** — `packages/database/.env.example` contains a live Neon connection string (credentials), contradicting “do not invent/commit credentials” and root `.env.example` placeholder practice.
-2. **HIGH** — `pnpm db:test` does **not** pass cleanly: 1 of 9 tests failed on re-run due to non-idempotent exchange-rate fixtures (unique constraint already present from prior runs). Acceptance requires automated financial invariant tests; the suite is currently red.
-3. Official roadmap/QA specs were missing at audit start (directories created by QA; roadmap files remain placeholders).
-
-Requirements verified against reconstructed acceptance criteria: **4 PASS / 1 FAIL / 0 BLOCKED** for the five written ACs, plus additional scope checks below. Critical/high defects remain → cannot approve.
+Initial decision was **NOT READY** due to DEF-P2-01 (CRITICAL) and DEF-P2-02 (HIGH). Those are resolved as of 2026-11-20 (see Re-verification).
 
 ---
 
@@ -44,7 +52,7 @@ Requirements verified against reconstructed acceptance criteria: **4 PASS / 1 FA
 | Prisma schema validates | **PASS** | `pnpm --filter @plexsol/database exec prisma validate` → “schema is valid” | — |
 | Migrations apply to a development database | **PASS** | `migrate:status` → “1 migration found… Database schema is up to date!” against configured Neon DB | Applied migration `20261119141716_init_phase2` |
 | Foreign keys and uniqueness constraints work | **PASS** | Migration FKs/unique indexes present; tests reject second maintenance agreement, XOR allocation targets, duplicate renewal→expense; exchange-rate uniqueness enforced (also caused flaky test) | — |
-| Financial invariants have automated tests | **FAIL** | `pnpm db:test` → **8 passed, 1 failed** | DEF-P2-02: non-idempotent FX history test |
+| Financial invariants have automated tests | **PASS** (as of 2026-11-20) | `pnpm db:test` → **9/9** on two consecutive runs | DEF-P2-02 resolved |
 | Prisma Client generates successfully | **PASS** | `pnpm db:generate` → client generated | — |
 
 ### Required entities & invariants (phase scope)
@@ -87,7 +95,8 @@ Requirements verified against reconstructed acceptance criteria: **4 PASS / 1 FA
 | `pnpm lint` | PASS |
 | `pnpm build` | PASS (web chunk-size warning only) |
 | `pnpm db:seed` | PASS (reference data) |
-| `pnpm db:test` | **FAIL** — 8/9 pass, 1 fail |
+| `pnpm db:test` (2026-11-19) | **FAIL** — 8/9 pass, 1 fail |
+| `pnpm db:test` (2026-11-20 ×2) | **PASS** — 9/9 both runs |
 | `prisma validate` without `DATABASE_URL` in process env | FAIL with P1012 (Phase 1 regression P1-M1) |
 
 ### Automated tests
@@ -119,24 +128,21 @@ Requirements verified against reconstructed acceptance criteria: **4 PASS / 1 FA
 | Field | Detail |
 | --- | --- |
 | Severity | **CRITICAL** |
+| Status | **RESOLVED** (2026-11-20) |
 | Affected file | `packages/database/.env.example` |
-| Description | File contains a real Neon `DATABASE_URL` with username/password host, not a placeholder. Root `.env.example` correctly uses `USER:PASSWORD@HOST`. |
-| Reproduction | Open `packages/database/.env.example` and inspect `DATABASE_URL`. |
-| Expected | Placeholder only (e.g. `postgresql://USER:PASSWORD@HOST/DB?sslmode=require`). |
-| Actual | Concrete Neon credentials embedded in an example file that is intended to be shared/copied. |
-| Recommended fix | 1) Replace with placeholders immediately. 2) Rotate/revoke the exposed Neon password in the Neon console. 3) Ensure only root `.env` (gitignored) holds secrets. 4) Confirm no other tracked files contain the same URL. |
+| Description | File previously contained a real Neon `DATABASE_URL`. |
+| Re-check | Now uses `postgresql://USER:PASSWORD@HOST/DB?sslmode=require`. No leftover Neon credential patterns found in repo sources. |
+| Follow-up | If that password was ever committed or shared, rotate it in the Neon console anyway. |
 
 ### DEF-P2-02 — Financial invariant test suite fails on re-run
 
 | Field | Detail |
 | --- | --- |
 | Severity | **HIGH** |
+| Status | **RESOLVED** (2026-11-20) |
 | Affected file | `packages/database/tests/financial-invariants.test.ts` |
-| Description | Test `preserves historical exchange rates (unique effectiveAt)` assumes it can insert `USD→ETB` at `2026-03-01T00:00:00.000Z`. Prior test runs leave that row; first create throws unique violation before the intentional duplicate assertion. |
-| Reproduction | 1) Ensure DB already has that rate (or run `pnpm db:test` twice). 2) Run `pnpm db:test`. |
-| Expected | Suite passes every run; uses unique timestamps/suffixes or cleanup. |
-| Actual | 1 failed / 8 passed on QA re-run. Constraint itself works. |
-| Recommended fix | Use unique `effectiveAt` (e.g. include `Date.now()`), or `upsert`/`deleteMany` cleanup in `beforeAll`/`afterAll` scoped to test tags. Make suite hermetic. |
+| Description | FX history test previously used a fixed `effectiveAt` and collided on re-runs. |
+| Re-check | Uses `Date.now()`-based unique timestamps + deletes created rows. `pnpm db:test` passed **9/9 twice**. |
 
 ### DEF-P2-03 — Prisma CLI still ignores root `.env` (carried from Phase 1)
 
@@ -184,14 +190,14 @@ Requirements verified against reconstructed acceptance criteria: **4 PASS / 1 FA
 
 ## Final acceptance decision
 
-### NOT READY
+### READY FOR NEXT PHASE
 
-Rationale: required acceptance criterion for a green automated financial invariant suite fails on re-run (**HIGH**), and a **CRITICAL** secret-management defect exists in `packages/database/.env.example`. Per gate rules, the phase cannot proceed until both are resolved and re-verified.
+**Updated 2026-11-20** after blocker re-verification.
 
-### Re-verification checklist (minimum)
+Rationale: DEF-P2-01 and DEF-P2-02 are resolved with evidence. All five Phase 2 acceptance criteria PASS. No critical/high defects remain.
 
-1. Replace/rotate credentials; confirm `.env.example` files are placeholders only.
-2. Fix FX test isolation; `pnpm db:test` → 9/9 green twice in a row.
-3. Confirm Prisma DB scripts work from documented root `.env` alone (or update docs + tooling).
-4. Author real `docs/roadmap/phase-02.md` (and ideally `master-prompt.md`).
-5. Re-run: `prisma validate`, `migrate status`, `db:generate`, `typecheck`, `lint`, `build`, `db:seed`, `db:test`.
+Non-blocking follow-ups:
+
+1. DEF-P2-03 — wire Prisma CLI to root `.env` (or document package-local `.env`).
+2. DEF-P2-04 — author real `docs/roadmap` specs (replace placeholders).
+3. Rotate the previously exposed Neon password if it was ever live/shared.

@@ -303,14 +303,17 @@ describe("financial invariants", () => {
   });
 
   it("preserves historical exchange rates (unique effectiveAt)", async () => {
-    const effectiveAt = new Date("2026-03-01T00:00:00.000Z");
-    await prisma.exchangeRate.create({
+    // Unique per run so re-runs do not collide with leftover fixture rows.
+    const effectiveAt = new Date(Date.now());
+    const laterAt = new Date(effectiveAt.getTime() + 86_400_000);
+
+    const created = await prisma.exchangeRate.create({
       data: {
         fromCurrencyCode: "USD",
         toCurrencyCode: "ETB",
         rate: "57.00000000",
         effectiveAt,
-        source: "test-history-1",
+        source: `test-history-1-${suffix}`,
       },
     });
 
@@ -321,7 +324,7 @@ describe("financial invariants", () => {
           toCurrencyCode: "ETB",
           rate: "58.00000000",
           effectiveAt,
-          source: "test-history-dup",
+          source: `test-history-dup-${suffix}`,
         },
       }),
     ).rejects.toThrow(/Unique constraint|unique/i);
@@ -331,11 +334,15 @@ describe("financial invariants", () => {
         fromCurrencyCode: "USD",
         toCurrencyCode: "ETB",
         rate: "58.25000000",
-        effectiveAt: new Date("2026-04-01T00:00:00.000Z"),
-        source: "test-history-2",
+        effectiveAt: laterAt,
+        source: `test-history-2-${suffix}`,
       },
     });
     expect(money(later.rate).eq("58.25000000")).toBe(true);
+
+    await prisma.exchangeRate.deleteMany({
+      where: { id: { in: [created.id, later.id] } },
+    });
   });
 
   it("uses Decimal math (not JS floats) for money helpers", () => {

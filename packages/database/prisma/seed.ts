@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { hash } from "@node-rs/argon2";
 import { config as loadEnv } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 
@@ -214,26 +215,38 @@ async function seed() {
   });
 
   console.log("[seed] Upserting bootstrap admin user…");
-  // Placeholder hash — replace via Phase 3 auth setup. Not a production password.
-  const placeholderHash =
-    "argon2id$phase2-placeholder$replace-during-auth-phase";
+  const adminPassword =
+    process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe-Plexsol-Admin-1!";
+  // @node-rs/argon2 defaults to Argon2id.
+  const passwordHash = await hash(adminPassword, {
+    memoryCost: 19_456,
+    timeCost: 2,
+    parallelism: 1,
+  });
+
   await prisma.user.upsert({
     where: { email: "admin@plexsol.com" },
     update: {
       name: "Admin",
       role: "ADMIN",
       isActive: true,
+      passwordHash,
     },
     create: {
       email: "admin@plexsol.com",
       name: "Admin",
       role: "ADMIN",
-      passwordHash: placeholderHash,
+      passwordHash,
       isActive: true,
     },
   });
 
   console.log("[seed] Done (reference data only).");
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.log(
+      "[seed] Admin password set from default SEED_ADMIN_PASSWORD fallback. Set SEED_ADMIN_PASSWORD in .env for a custom value.",
+    );
+  }
 }
 
 seed()

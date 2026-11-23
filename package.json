@@ -24,6 +24,7 @@
     "db:seed": "pnpm --filter @plexsol/database seed",
     "db:studio": "pnpm --filter @plexsol/database studio",
     "db:test": "pnpm --filter @plexsol/database test",
+    "test:api": "pnpm --filter @plexsol/api test",
     "clean": "pnpm run -r --if-present clean && rimraf node_modules"
   },
   "devDependencies": {

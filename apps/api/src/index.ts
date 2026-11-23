@@ -1,5 +1,14 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import { createApp } from "./app.js";
 import { loadApiEnv } from "./env.js";
+
+const rootEnv = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../.env",
+);
+loadEnv({ path: rootEnv });
 
 const env = loadApiEnv();
 const app = createApp(env);
