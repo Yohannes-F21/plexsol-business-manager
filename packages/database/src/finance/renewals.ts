@@ -102,6 +102,17 @@ export async function confirmSubscriptionRenewal(
       },
     });
 
+    // Invalidate obsolete subscription reminders for the prior expiration window.
+    await tx.scheduledEvent.updateMany({
+      where: {
+        type: "SUBSCRIPTION_REMINDER",
+        entityType: "Subscription",
+        entityId: subscription.id,
+        status: { in: ["PENDING", "AWAITING_APPROVAL", "APPROVED"] },
+      },
+      data: { status: "CANCELLED" },
+    });
+
     await tx.auditLog.create({
       data: {
         actorUserId: input.confirmedById,

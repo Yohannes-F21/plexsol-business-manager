@@ -113,7 +113,7 @@ async function seed() {
   }
 
   console.log("[seed] Upserting expense categories…");
-  const categories = [
+  const expenseCategories = [
     {
       slug: "subscription_renewal",
       name: "Subscription Renewal",
@@ -133,13 +133,46 @@ async function seed() {
       isSystem: false,
     },
   ];
-  for (const category of categories) {
+  for (const category of expenseCategories) {
     await prisma.expenseCategory.upsert({
       where: { slug: category.slug },
       update: {
         name: category.name,
         description: category.description,
         isSystem: category.isSystem,
+      },
+      create: category,
+    });
+  }
+
+  console.log("[seed] Upserting subscription categories…");
+  for (const category of [
+    {
+      slug: "productivity",
+      name: "Productivity",
+      description: "Office and productivity tools",
+    },
+    {
+      slug: "design",
+      name: "Design",
+      description: "Design and creative tools",
+    },
+    {
+      slug: "development",
+      name: "Development",
+      description: "Developer tools and platforms",
+    },
+    {
+      slug: "infrastructure",
+      name: "Infrastructure",
+      description: "Hosting, cloud, and infrastructure",
+    },
+  ]) {
+    await prisma.subscriptionCategory.upsert({
+      where: { slug: category.slug },
+      update: {
+        name: category.name,
+        description: category.description,
       },
       create: category,
     });

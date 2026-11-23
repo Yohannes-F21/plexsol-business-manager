@@ -158,10 +158,17 @@ pnpm test:api         # auth integration tests
 
 ## Phase status
 
-**Phase 4 — Dashboard UI** (current)
+**Phase 5 — Core Business Modules** (current)
+
+- CRUD for clients, projects, subscriptions (+ renewals), expenses, categories, payment methods
+- Renewal confirms payment + new expiration, creates expense atomically, cancels obsolete reminders
+- Projects track agreed price and lifecycle independently of payment status
+- API integration tests in `apps/api/tests/core-modules.test.ts`
+
+**Phase 4 — Dashboard UI** (done)
 
 - KPI cards, Recharts overview, attention panel, summaries, transactions, renewals (ETB)
-- Replaceable data layer with labeled development fixtures until `/api/dashboard` exists
+- Fixture-backed dashboard until `/api/dashboard` exists
 
 **Phase 3 — Authentication & Application Layout** (done)
 
@@ -175,4 +182,4 @@ pnpm test:api         # auth integration tests
 
 - Monorepo tooling, shared packages, Prisma Neon config, health API, worker process, branded frontend shell
 
-Next: Core modules CRUD (Phase 5).
+Out of scope this phase: maintenance billing, automated email delivery.

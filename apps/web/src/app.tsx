@@ -3,6 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { AppShell } from "@/components/layout/app-shell";
+import { ClientDetailPage } from "@/features/clients/client-detail-page";
+import { ClientsPage } from "@/features/clients/clients-page";
+import { ExpenseDetailPage } from "@/features/expenses/expense-detail-page";
+import { ExpensesPage } from "@/features/expenses/expenses-page";
+import { ProjectDetailPage } from "@/features/projects/project-detail-page";
+import { ProjectsPage } from "@/features/projects/projects-page";
+import { SettingsPage } from "@/features/settings/settings-page";
+import { SubscriptionDetailPage } from "@/features/subscriptions/subscription-detail-page";
+import { SubscriptionsPage } from "@/features/subscriptions/subscriptions-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { LoginPage } from "@/pages/login-page";
 import { PlaceholderPage } from "@/pages/placeholder-page";
@@ -26,18 +35,15 @@ export function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
                 <Route index element={<DashboardPage />} />
+                <Route path="subscriptions" element={<SubscriptionsPage />} />
                 <Route
-                  path="subscriptions"
-                  element={<PlaceholderPage title="Subscriptions" />}
+                  path="subscriptions/:id"
+                  element={<SubscriptionDetailPage />}
                 />
-                <Route
-                  path="clients"
-                  element={<PlaceholderPage title="Clients" />}
-                />
-                <Route
-                  path="projects"
-                  element={<PlaceholderPage title="Projects" />}
-                />
+                <Route path="clients" element={<ClientsPage />} />
+                <Route path="clients/:id" element={<ClientDetailPage />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="projects/:id" element={<ProjectDetailPage />} />
                 <Route
                   path="maintenance"
                   element={<PlaceholderPage title="Maintenance" />}
@@ -46,10 +52,8 @@ export function App() {
                   path="payments"
                   element={<PlaceholderPage title="Payments" />}
                 />
-                <Route
-                  path="expenses"
-                  element={<PlaceholderPage title="Expenses" />}
-                />
+                <Route path="expenses" element={<ExpensesPage />} />
+                <Route path="expenses/:id" element={<ExpenseDetailPage />} />
                 <Route
                   path="notifications"
                   element={<PlaceholderPage title="Notifications" />}
@@ -58,10 +62,7 @@ export function App() {
                   path="reports"
                   element={<PlaceholderPage title="Reports" />}
                 />
-                <Route
-                  path="settings"
-                  element={<PlaceholderPage title="Settings" />}
-                />
+                <Route path="settings" element={<SettingsPage />} />
               </Route>
             </Route>
 

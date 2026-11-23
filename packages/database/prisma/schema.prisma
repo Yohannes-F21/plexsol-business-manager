@@ -185,14 +185,15 @@ model Currency {
   /// Exactly one reporting currency (ETB) enforced via partial unique index in SQL.
   isReporting   Boolean @default(false) @map("is_reporting")
 
-  exchangeRatesFrom ExchangeRate[]      @relation("RateFrom")
-  exchangeRatesTo   ExchangeRate[]      @relation("RateTo")
+  exchangeRatesFrom     ExchangeRate[]           @relation("RateFrom")
+  exchangeRatesTo       ExchangeRate[]           @relation("RateTo")
   maintenanceAgreements MaintenanceAgreement[]
-  billingCycles     MaintenanceBillingCycle[]
-  clientPayments    ClientPayment[]
-  subscriptions     Subscription[]
-  renewals          SubscriptionRenewal[]
-  expenses          Expense[]
+  billingCycles         MaintenanceBillingCycle[]
+  clientPayments        ClientPayment[]
+  projects              Project[]
+  subscriptions         Subscription[]
+  renewals              SubscriptionRenewal[]
+  expenses              Expense[]
 
   @@map("currencies")
 }
@@ -259,20 +260,24 @@ model Client {
 }
 
 model Project {
-  id          String        @id @default(uuid()) @db.Uuid
-  clientId    String        @map("client_id") @db.Uuid
-  name        String
-  description String?
-  status      ProjectStatus @default(IN_PROGRESS)
-  startDate   DateTime?     @map("start_date") @db.Date
-  endDate     DateTime?     @map("end_date") @db.Date
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id           String        @id @default(uuid()) @db.Uuid
+  clientId     String        @map("client_id") @db.Uuid
+  name         String
+  description  String?
+  status       ProjectStatus @default(IN_PROGRESS)
+  /// Agreed development price — independent of payment / allocation status.
+  agreedPrice  Decimal       @map("agreed_price") @db.Decimal(19, 4)
+  currencyCode String        @default("ETB") @map("currency_code") @db.Char(3)
+  startDate    DateTime?     @map("start_date") @db.Date
+  endDate      DateTime?     @map("end_date") @db.Date
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  client                Client                 @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client               Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  currency             Currency              @relation(fields: [currencyCode], references: [code])
   /// Zero or one maintenance agreement per project (unique on projectId).
-  maintenanceAgreement  MaintenanceAgreement?
-  paymentAllocations    PaymentAllocation[]
+  maintenanceAgreement MaintenanceAgreement?
+  paymentAllocations   PaymentAllocation[]
 
   @@index([clientId])
   @@index([status])
@@ -396,33 +401,45 @@ model ExpenseCategory {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  expenses      Expense[]
-  subscriptions Subscription[]
+  expenses Expense[]
 
   @@map("expense_categories")
 }
 
+model SubscriptionCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  subscriptions Subscription[]
+
+  @@map("subscription_categories")
+}
+
 model Subscription {
-  id                 String                     @id @default(uuid()) @db.Uuid
+  id                 String                    @id @default(uuid()) @db.Uuid
   name               String
   vendor             String?
-  categoryId         String?                    @map("category_id") @db.Uuid
-  amount             Decimal                    @db.Decimal(19, 4)
-  currencyCode       String                     @map("currency_code") @db.Char(3)
-  billingPeriod      SubscriptionBillingPeriod  @map("billing_period")
-  startDate          DateTime                   @map("start_date") @db.Date
-  expirationDate     DateTime                   @map("expiration_date") @db.Date
-  status             SubscriptionStatus         @default(ACTIVE)
+  categoryId         String?                   @map("category_id") @db.Uuid
+  amount             Decimal                   @db.Decimal(19, 4)
+  currencyCode       String                    @map("currency_code") @db.Char(3)
+  billingPeriod      SubscriptionBillingPeriod @map("billing_period")
+  startDate          DateTime                  @map("start_date") @db.Date
+  expirationDate     DateTime                  @map("expiration_date") @db.Date
+  status             SubscriptionStatus        @default(ACTIVE)
   /// Days before expiration to remind, e.g. [30, 14, 7, 1]
-  reminderDaysBefore Int[]                      @default([30, 14, 7, 1]) @map("reminder_days_before")
+  reminderDaysBefore Int[]                     @default([30, 14, 7, 1]) @map("reminder_days_before")
   url                String?
   notes              String?
-  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  category  ExpenseCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  currency  Currency              @relation(fields: [currencyCode], references: [code])
-  renewals  SubscriptionRenewal[]
+  category SubscriptionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  currency Currency              @relation(fields: [currencyCode], references: [code])
+  renewals SubscriptionRenewal[]
 
   @@index([expirationDate, status])
   @@map("subscriptions")

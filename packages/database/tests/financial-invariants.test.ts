@@ -56,10 +56,20 @@ async function seedFixtures() {
   });
 
   const projectA = await prisma.project.create({
-    data: { clientId: clientA.id, name: `Project A ${suffix}` },
+    data: {
+      clientId: clientA.id,
+      name: `Project A ${suffix}`,
+      agreedPrice: "10000.0000",
+      currencyCode: "ETB",
+    },
   });
   const projectB = await prisma.project.create({
-    data: { clientId: clientB.id, name: `Project B ${suffix}` },
+    data: {
+      clientId: clientB.id,
+      name: `Project B ${suffix}`,
+      agreedPrice: "8000.0000",
+      currencyCode: "ETB",
+    },
   });
 
   const agreement = await prisma.maintenanceAgreement.create({
