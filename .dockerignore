@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.cursor
+.env
+.env.*
+!.env.example
+coverage
+agent-transcripts
+**/.vite
+**/playwright-report
+docs/QA
+*.md
+!docs/deployment.md

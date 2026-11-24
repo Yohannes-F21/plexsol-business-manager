@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient, SubscriptionRenewal } from "@prisma/client";
+import { cancelSubscriptionReminders } from "../jobs/cancel-reminders.js";
+import { scheduleSubscriptionRemindersFor } from "../jobs/schedule-reminders.js";
 import { assertPositiveMoney, convertAmount, money } from "../money.js";
 
 export type ConfirmRenewalInput = {
@@ -43,24 +45,28 @@ export async function confirmSubscriptionRenewal(
       );
     }
 
-    let amountEtb = input.amountEtb ? money(input.amountEtb) : null;
-    if (!amountEtb) {
-      if (input.currencyCode === "ETB") {
-        amountEtb = amount;
-      } else if (input.exchangeRateId) {
-        const rate = await tx.exchangeRate.findUniqueOrThrow({
-          where: { id: input.exchangeRateId },
-        });
-        if (
-          rate.fromCurrencyCode !== input.currencyCode ||
-          rate.toCurrencyCode !== "ETB"
-        ) {
-          throw new Error("Exchange rate must convert payment currency to ETB");
-        }
-        amountEtb = convertAmount(amount, money(rate.rate));
-      } else {
-        throw new Error("amountEtb or exchangeRateId is required for non-ETB renewals");
+    // ETB renewals always snapshot 1:1 — reject mismatched amountEtb (DEF-FS-01).
+    let amountEtb: ReturnType<typeof money>;
+    if (input.currencyCode === "ETB") {
+      if (input.amountEtb != null && !money(input.amountEtb).eq(amount)) {
+        throw new Error("For ETB renewals, amountEtb must equal amount");
       }
+      amountEtb = amount;
+    } else if (input.amountEtb) {
+      amountEtb = money(input.amountEtb);
+    } else if (input.exchangeRateId) {
+      const rate = await tx.exchangeRate.findUniqueOrThrow({
+        where: { id: input.exchangeRateId },
+      });
+      if (
+        rate.fromCurrencyCode !== input.currencyCode ||
+        rate.toCurrencyCode !== "ETB"
+      ) {
+        throw new Error("Exchange rate must convert payment currency to ETB");
+      }
+      amountEtb = convertAmount(amount, money(rate.rate));
+    } else {
+      throw new Error("amountEtb or exchangeRateId is required for non-ETB renewals");
     }
 
     const expense = await tx.expense.create({
@@ -102,16 +108,9 @@ export async function confirmSubscriptionRenewal(
       },
     });
 
-    // Invalidate obsolete subscription reminders for the prior expiration window.
-    await tx.scheduledEvent.updateMany({
-      where: {
-        type: "SUBSCRIPTION_REMINDER",
-        entityType: "Subscription",
-        entityId: subscription.id,
-        status: { in: ["PENDING", "AWAITING_APPROVAL", "APPROVED"] },
-      },
-      data: { status: "CANCELLED" },
-    });
+    // Cancel obsolete reminders inside the financial transaction.
+    // Reschedule after commit — Neon pooled interactive txs time out on many inserts.
+    await cancelSubscriptionReminders(tx, subscription.id);
 
     await tx.auditLog.create({
       data: {
@@ -127,9 +126,16 @@ export async function confirmSubscriptionRenewal(
     return renewal;
   };
 
-  if ("$transaction" in db) {
-    return db.$transaction((tx) => run(tx));
-  }
+  const renewal =
+    "$transaction" in db
+      ? await db.$transaction((tx) => run(tx), {
+          timeout: 60_000,
+          maxWait: 10_000,
+        })
+      : await run(db);
 
-  return run(db);
+  // Schedule against the new expiration outside the interactive transaction.
+  await scheduleSubscriptionRemindersFor(db, input.subscriptionId);
+
+  return renewal;
 }

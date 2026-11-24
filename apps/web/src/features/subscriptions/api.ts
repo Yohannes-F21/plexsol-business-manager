@@ -85,6 +85,7 @@ export function listExchangeRates(params?: {
   fromCurrencyCode?: string;
   toCurrencyCode?: string;
   pageSize?: number;
+  page?: number;
 }) {
   const search = new URLSearchParams();
   if (params?.fromCurrencyCode) {
@@ -94,8 +95,22 @@ export function listExchangeRates(params?: {
     search.set("toCurrencyCode", params.toCurrencyCode);
   }
   if (params?.pageSize) search.set("pageSize", String(params.pageSize));
+  if (params?.page) search.set("page", String(params.page));
   const qs = search.toString();
-  return apiFetch<{ data: ExchangeRate[] }>(
+  return apiFetch<{ data: ExchangeRate[]; meta: { total: number } }>(
     `/api/exchange-rates${qs ? `?${qs}` : ""}`,
   );
+}
+
+export function createExchangeRate(body: {
+  fromCurrencyCode: string;
+  toCurrencyCode: string;
+  rate: string;
+  effectiveAt: string;
+  source?: string | null;
+}) {
+  return apiFetch<{ data: ExchangeRate }>("/api/exchange-rates", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }

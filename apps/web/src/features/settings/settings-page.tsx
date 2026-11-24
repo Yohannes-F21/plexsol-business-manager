@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Plus } from "lucide-react";
@@ -34,14 +34,22 @@ import {
   type PaymentMethod,
 } from "@/features/payment-methods/api";
 import {
+  createExchangeRate,
+  listExchangeRates,
   subscriptionCategoriesApi,
   type SubscriptionCategory,
 } from "@/features/subscriptions/api";
-import { ApiError } from "@/lib/api";
-import { labelize } from "@/lib/format";
+import { useAuth } from "@/hooks/use-auth";
+import { ApiError, apiFetch } from "@/lib/api";
+import { formatDate, labelize, toDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Tab = "payment-methods" | "expense-categories" | "subscription-categories";
+type Tab =
+  | "payment-methods"
+  | "expense-categories"
+  | "subscription-categories"
+  | "exchange-rates"
+  | "ops";
 
 function slugify(value: string) {
   return value
@@ -58,7 +66,7 @@ export function SettingsPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Settings"
-        description="Reference data for payment methods and categories."
+        description="Reference data for payment methods, categories, and historical exchange rates."
       />
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-3">
@@ -67,6 +75,8 @@ export function SettingsPage() {
             ["payment-methods", "Payment methods"],
             ["expense-categories", "Expense categories"],
             ["subscription-categories", "Subscription categories"],
+            ["exchange-rates", "Exchange rates"],
+            ["ops", "Reminders & email"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -88,7 +98,319 @@ export function SettingsPage() {
       {tab === "subscription-categories" ? (
         <SubscriptionCategoriesPanel />
       ) : null}
+      {tab === "exchange-rates" ? <ExchangeRatesPanel /> : null}
+      {tab === "ops" ? <OpsSettingsPanel /> : null}
     </div>
+  );
+}
+
+type AppSetting = {
+  id: string;
+  key: string;
+  value: unknown;
+  description: string | null;
+};
+
+function OpsSettingsPanel() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const isAdmin = user?.role === "ADMIN";
+  const [error, setError] = useState<string | null>(null);
+  const [reminderDays, setReminderDays] = useState("30, 7, 3, 1, 0");
+  const [afterDays, setAfterDays] = useState("-1, -7");
+  const [paymentInstructions, setPaymentInstructions] = useState("");
+
+  const query = useQuery({
+    queryKey: ["settings", "ops"],
+    queryFn: () => apiFetchSettings(),
+  });
+
+  useEffect(() => {
+    if (!query.data) return;
+    for (const setting of query.data) {
+      if (setting.key === "subscription_reminder_days" && Array.isArray(setting.value)) {
+        setReminderDays((setting.value as number[]).join(", "));
+      }
+      if (
+        setting.key === "subscription_reminder_after_expiration_days" &&
+        Array.isArray(setting.value)
+      ) {
+        setAfterDays((setting.value as number[]).join(", "));
+      }
+      if (
+        setting.key === "payment_instructions" &&
+        typeof setting.value === "string"
+      ) {
+        setPaymentInstructions(setting.value);
+      }
+    }
+  }, [query.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const before = parseIntList(reminderDays);
+      const after = parseIntList(afterDays);
+      await Promise.all([
+        upsertSetting("subscription_reminder_days", before),
+        upsertSetting("subscription_reminder_after_expiration_days", after),
+        upsertSetting("payment_instructions", paymentInstructions),
+      ]);
+    },
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : "Failed to save settings");
+    },
+  });
+
+  if (query.isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Spinner className="size-8" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <div>
+        <h2 className="text-lg font-semibold">Reminders & payment instructions</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Defaults used when a subscription has no per-subscription override. Negative
+          after-expiration offsets are days after expiry.
+        </p>
+      </div>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <FormField label="Reminder days before / on expiration (comma-separated)">
+        <Input
+          value={reminderDays}
+          onChange={(event) => setReminderDays(event.target.value)}
+          disabled={!isAdmin}
+          placeholder="30, 7, 3, 1, 0"
+        />
+      </FormField>
+      <FormField label="After-expiration reminder offsets (negative)">
+        <Input
+          value={afterDays}
+          onChange={(event) => setAfterDays(event.target.value)}
+          disabled={!isAdmin}
+          placeholder="-1, -7"
+        />
+      </FormField>
+      <FormField label="Payment instructions (inserted into billing emails)">
+        <Textarea
+          value={paymentInstructions}
+          onChange={(event) => setPaymentInstructions(event.target.value)}
+          disabled={!isAdmin}
+          rows={4}
+        />
+      </FormField>
+      {isAdmin ? (
+        <Button
+          type="button"
+          disabled={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+        >
+          Save
+        </Button>
+      ) : (
+        <p className="text-xs text-muted-foreground">Only administrators can edit these settings.</p>
+      )}
+    </div>
+  );
+}
+
+function parseIntList(value: string): number[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => Number(part))
+    .filter((num) => Number.isFinite(num));
+}
+
+async function apiFetchSettings(): Promise<AppSetting[]> {
+  const json = await apiFetch<{ data: AppSetting[] }>("/api/settings");
+  return json.data;
+}
+
+async function upsertSetting(key: string, value: unknown) {
+  await apiFetch(`/api/settings/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ key, value }),
+  });
+}
+
+function ExchangeRatesPanel() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isAdmin = user?.role === "ADMIN";
+
+  const query = useQuery({
+    queryKey: ["exchange-rates", "settings"],
+    queryFn: () => listExchangeRates({ pageSize: 50, toCurrencyCode: "ETB" }),
+  });
+
+  const form = useForm<{
+    fromCurrencyCode: string;
+    toCurrencyCode: string;
+    rate: string;
+    effectiveAt: string;
+    source: string;
+  }>({
+    defaultValues: {
+      fromCurrencyCode: "USD",
+      toCurrencyCode: "ETB",
+      rate: "",
+      effectiveAt: toDateInputValue(new Date()),
+      source: "manual",
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createExchangeRate,
+    onSuccess: () => {
+      setOpen(false);
+      setError(null);
+      form.reset({
+        fromCurrencyCode: "USD",
+        toCurrencyCode: "ETB",
+        rate: "",
+        effectiveAt: toDateInputValue(new Date()),
+        source: "manual",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["exchange-rates"] });
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : "Failed to create rate");
+    },
+  });
+
+  return (
+    <>
+      <ReferencePanel
+        title="Historical exchange rates"
+        onAdd={() => {
+          if (!isAdmin) {
+            setError("Only administrators can add exchange rates.");
+            return;
+          }
+          setError(null);
+          setOpen(true);
+        }}
+        loading={query.isLoading}
+      >
+        <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+          Rates are append-only snapshots (never overwritten). Use a new effective date for updates.
+        </p>
+        {!query.data?.data.length ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No exchange rates yet.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Pair</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Effective</TableHead>
+                <TableHead>Source</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {query.data.data.map((rate) => (
+                <TableRow key={rate.id}>
+                  <TableCell className="font-medium">
+                    {rate.fromCurrencyCode} → {rate.toCurrencyCode}
+                  </TableCell>
+                  <TableCell className="tabular-nums">{rate.rate}</TableCell>
+                  <TableCell>{formatDate(rate.effectiveAt)}</TableCell>
+                  <TableCell>{rate.source ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </ReferencePanel>
+
+      {error && !open ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add exchange rate</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={form.handleSubmit((values) => {
+              setError(null);
+              createMutation.mutate({
+                fromCurrencyCode: values.fromCurrencyCode,
+                toCurrencyCode: values.toCurrencyCode,
+                rate: values.rate,
+                effectiveAt: values.effectiveAt,
+                source: values.source || "manual",
+              });
+            })}
+          >
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <FormField label="From currency" error={form.formState.errors.fromCurrencyCode?.message}>
+              <Select {...form.register("fromCurrencyCode")}>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="ETB">ETB</option>
+              </Select>
+            </FormField>
+            <FormField label="To currency" error={form.formState.errors.toCurrencyCode?.message}>
+              <Select {...form.register("toCurrencyCode")}>
+                <option value="ETB">ETB</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </Select>
+            </FormField>
+            <FormField
+              label="Rate (units of to-currency per 1 from)"
+              error={form.formState.errors.rate?.message}
+            >
+              <Input
+                {...form.register("rate", { required: "Rate is required" })}
+                placeholder="56.50000000"
+              />
+            </FormField>
+            <FormField label="Effective at" error={form.formState.errors.effectiveAt?.message}>
+              <Input type="date" {...form.register("effectiveAt", { required: true })} />
+            </FormField>
+            <FormField label="Source">
+              <Input {...form.register("source")} placeholder="manual" />
+            </FormField>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                Save snapshot
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

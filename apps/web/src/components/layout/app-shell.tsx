@@ -47,7 +47,10 @@ function NavItems({
   onNavigate?: () => void;
 }) {
   return (
-    <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+    <nav
+      aria-label="Primary"
+      className="flex flex-1 flex-col gap-1 px-3 py-2"
+    >
       {navItems.map(({ to, label, icon: Icon, ...rest }) => (
         <NavLink
           key={to}
@@ -62,7 +65,7 @@ function NavItems({
             )
           }
         >
-          <Icon className="size-4 shrink-0" />
+          <Icon className="size-4 shrink-0" aria-hidden="true" />
           {label}
         </NavLink>
       ))}

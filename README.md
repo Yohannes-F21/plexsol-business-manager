@@ -53,6 +53,11 @@ Documented variables (see `.env.example`):
 | `VITE_API_URL` | web | API base URL (optional; Vite proxy used in dev) |
 | `WORKER_POLL_INTERVAL_MS` | worker | Idle poll interval |
 | `WORKER_ENABLED` | worker | Enable/disable worker process |
+| `WORKER_HEALTH_PORT` | worker | Optional HTTP health port (`/health`, `/health/ready`); `0` disables |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | worker | Optional SMTP transport (console fallback when host empty) |
+| `EMAIL_FROM` | worker | From address for outbound email |
+
+Full production notes: [`docs/deployment.md`](docs/deployment.md).
 
 ## Getting started
 
@@ -99,6 +104,9 @@ Then point `DATABASE_URL` at `postgresql://plexsol:plexsol@localhost:5432/plexso
 | `pnpm db:push` | `prisma db push` (needs real DB) |
 | `pnpm db:migrate` | `prisma migrate dev` (needs real DB) |
 | `pnpm db:studio` | Open Prisma Studio |
+| `pnpm db:test` | Database unit/integration tests |
+| `pnpm test:api` | API integration tests |
+| `pnpm build` | Production build (shared → apps) |
 
 ## Health check
 
@@ -106,18 +114,17 @@ With the API running:
 
 ```bash
 curl http://localhost:4000/health
+curl http://localhost:4000/health/ready
 ```
 
-Expected shape:
+Worker (when `WORKER_HEALTH_PORT=4010`):
 
-```json
-{
-  "status": "ok",
-  "service": "plexsol-api",
-  "timestamp": "2026-01-01T00:00:00.000Z",
-  "version": "0.1.0"
-}
+```bash
+curl http://localhost:4010/health
+curl http://localhost:4010/health/ready
 ```
+
+Liveness returns `status: "ok"`. Readiness also checks Neon/`DATABASE_URL` connectivity.
 
 ## Design
 
@@ -158,7 +165,26 @@ pnpm test:api         # auth integration tests
 
 ## Phase status
 
-**Phase 5 — Core Business Modules** (current)
+**Phase 8 — Reports, Production Readiness, and Deployment** (done)
+
+- Reports: income/expenses/net cash flow, outstanding balances, maintenance recurring, renewal forecasts, project summaries (ETB snapshots)
+- Monthly / yearly / custom filters; live `/api/dashboard` + `/reports` UI
+- API + worker readiness probes; Docker images + `docs/deployment.md` (no unapproved production deploys)
+
+**Phase 7 — Background Jobs, Notifications, and Email** (done)
+
+- Separate PostgreSQL-backed worker with SKIP LOCKED claims, leases, crash recovery, idempotency
+- Subscription / maintenance-due reminders; overdue drafts require admin approval
+- Console or SMTP email transport, delivery attempts (max 3), in-app notifications UI
+
+**Phase 6 — Payments & Maintenance Billing** (done)
+
+- Client payment receipts with ETB FX snapshots; flexible multi-target allocations
+- Maintenance agreements with explicit activation; monthly/yearly cycles (month-end clamping)
+- Outstanding balances per client/project/cycle; concurrency-safe allocation locks
+- Tests: `packages/database/tests/billing-cycles.test.ts`, `apps/api/tests/payments-maintenance.test.ts`
+
+**Phase 5 — Core Business Modules** (done)
 
 - CRUD for clients, projects, subscriptions (+ renewals), expenses, categories, payment methods
 - Renewal confirms payment + new expiration, creates expense atomically, cancels obsolete reminders
@@ -168,7 +194,7 @@ pnpm test:api         # auth integration tests
 **Phase 4 — Dashboard UI** (done)
 
 - KPI cards, Recharts overview, attention panel, summaries, transactions, renewals (ETB)
-- Fixture-backed dashboard until `/api/dashboard` exists
+- Live `/api/dashboard` (fixtures only if API returns 404/501)
 
 **Phase 3 — Authentication & Application Layout** (done)
 
@@ -182,4 +208,4 @@ pnpm test:api         # auth integration tests
 
 - Monorepo tooling, shared packages, Prisma Neon config, health API, worker process, branded frontend shell
 
-Out of scope this phase: maintenance billing, automated email delivery.
+See `docs/roadmap/phase-08.md` and `docs/deployment.md`.

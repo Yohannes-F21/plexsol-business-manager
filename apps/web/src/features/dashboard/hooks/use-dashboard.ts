@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getDashboardSnapshot } from "../data/repository";
 
-export function useDashboard(initialPeriodId = "2025-01") {
+function defaultPeriodId() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function useDashboard(initialPeriodId = defaultPeriodId()) {
   const [periodId, setPeriodId] = useState(initialPeriodId);
 
   const query = useQuery({

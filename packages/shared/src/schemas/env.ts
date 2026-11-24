@@ -34,7 +34,17 @@ export const workerEnvSchema = z.object({
     .optional()
     .transform((value) => value !== "false"),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.string().url().min(1),
+  SMTP_HOST: z.string().optional().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional().default(""),
+  SMTP_PASSWORD: z.string().optional().default(""),
+  EMAIL_FROM: z
+    .string()
+    .min(1)
+    .default("Plexsol Business Manager <noreply@plexsol.com>"),
+  /** Optional HTTP health port for managed hosting probes (0 = disabled). */
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(0).default(0),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

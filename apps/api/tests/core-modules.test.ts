@@ -265,13 +265,35 @@ describe("core business modules API", () => {
     expect(expense.isSubscriptionRenewal).toBe(true);
     expect(Number(expense.amount.toString())).toBe(120);
 
+    // Phase 7: obsolete reminders are cancelled; new ones are scheduled for the
+    // renewed expiration (not "all cancelled").
     const reminders = await prisma.scheduledEvent.findMany({
       where: {
         entityId: created.subscriptionId,
         type: "SUBSCRIPTION_REMINDER",
       },
     });
-    expect(reminders.every((event) => event.status === "CANCELLED")).toBe(true);
+    const openReminders = reminders.filter((event) =>
+      ["PENDING", "APPROVED", "AWAITING_APPROVAL"].includes(event.status),
+    );
+    expect(openReminders.length).toBeGreaterThan(0);
+    expect(
+      openReminders.every((event) => {
+        const payload = (event.payload ?? {}) as { expirationDate?: string };
+        return payload.expirationDate === "2027-01-01";
+      }),
+    ).toBe(true);
+    expect(
+      reminders
+        .filter((event) => {
+          const payload = (event.payload ?? {}) as { expirationDate?: string };
+          return (
+            payload.expirationDate === "2026-01-01" ||
+            (payload as { test?: boolean }).test === true
+          );
+        })
+        .every((event) => event.status === "CANCELLED"),
+    ).toBe(true);
 
     const detail = await agent.get(`/api/subscriptions/${created.subscriptionId}`);
     expect(detail.status).toBe(200);
@@ -282,6 +304,53 @@ describe("core business modules API", () => {
     const res = await agent.post("/api/clients").send({ name: "" });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("validation_error");
+  });
+
+  it("rejects mismatched amountEtb on ETB renewals", async () => {
+    const create = await agent.post("/api/subscriptions").send({
+      name: `ETB Renew Guard ${suffix}`,
+      vendor: "Local",
+      categoryId: created.subscriptionCategoryId,
+      amount: "50.00",
+      currencyCode: "ETB",
+      billingPeriod: "YEARLY",
+      startDate: "2025-01-01",
+      expirationDate: "2026-06-01",
+      status: "ACTIVE",
+    });
+    expect(create.status).toBe(201);
+    const subscriptionId = create.body.data.id as string;
+
+    const mismatched = await agent
+      .post(`/api/subscriptions/${subscriptionId}/renewals`)
+      .send({
+        renewedAt: "2026-06-02",
+        newExpirationDate: "2027-06-01",
+        amount: "100.00",
+        currencyCode: "ETB",
+        amountEtb: "999.00",
+        paymentMethodId: created.paymentMethodId,
+      });
+    expect(mismatched.status).toBe(400);
+    expect(mismatched.body.error).toBe("validation_error");
+
+    const matching = await agent
+      .post(`/api/subscriptions/${subscriptionId}/renewals`)
+      .send({
+        renewedAt: "2026-06-02",
+        newExpirationDate: "2027-06-01",
+        amount: "100.00",
+        currencyCode: "ETB",
+        amountEtb: "100.00",
+        paymentMethodId: created.paymentMethodId,
+      });
+    expect(matching.status).toBe(201);
+    expect(Number(matching.body.data.amount)).toBe(100);
+
+    const expense = await prisma.expense.findUniqueOrThrow({
+      where: { id: matching.body.data.expenseId },
+    });
+    expect(Number(expense.amountEtb.toString())).toBe(100);
   });
 
   it("rejects non-ETB renewals without amountEtb or exchangeRateId", async () => {

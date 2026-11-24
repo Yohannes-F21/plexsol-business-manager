@@ -1,4 +1,5 @@
 import { loadWorkerEnv } from "./env.js";
+import { startWorkerHealthServer } from "./health.js";
 import { runWorkerTick } from "./tick.js";
 
 const env = loadWorkerEnv();
@@ -11,9 +12,8 @@ if (!env.WORKER_ENABLED) {
 console.log(
   `[worker] Plexsol Business Manager worker started (poll every ${env.WORKER_POLL_INTERVAL_MS}ms)`,
 );
-console.log(
-  "[worker] Phase 1 foundation only — job processors will be added in later phases.",
-);
+
+const healthServer = startWorkerHealthServer(env.WORKER_HEALTH_PORT);
 
 let tickInFlight = false;
 
@@ -24,7 +24,7 @@ const schedule = async () => {
 
   tickInFlight = true;
   try {
-    await runWorkerTick();
+    await runWorkerTick(env);
   } catch (error) {
     console.error("[worker] Tick failed:", error);
   } finally {
@@ -40,6 +40,7 @@ const interval = setInterval(() => {
 const shutdown = (signal: string) => {
   console.log(`[worker] Received ${signal}, shutting down...`);
   clearInterval(interval);
+  healthServer?.close();
   process.exit(0);
 };
 

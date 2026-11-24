@@ -7,14 +7,18 @@ import { ClientDetailPage } from "@/features/clients/client-detail-page";
 import { ClientsPage } from "@/features/clients/clients-page";
 import { ExpenseDetailPage } from "@/features/expenses/expense-detail-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
+import { MaintenancePage } from "@/features/maintenance/maintenance-page";
+import { NotificationsPage } from "@/features/notifications/notifications-page";
+import { PaymentDetailPage } from "@/features/payments/payment-detail-page";
+import { PaymentsPage } from "@/features/payments/payments-page";
 import { ProjectDetailPage } from "@/features/projects/project-detail-page";
 import { ProjectsPage } from "@/features/projects/projects-page";
+import { ReportsPage } from "@/features/reports/reports-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { SubscriptionDetailPage } from "@/features/subscriptions/subscription-detail-page";
 import { SubscriptionsPage } from "@/features/subscriptions/subscriptions-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { LoginPage } from "@/pages/login-page";
-import { PlaceholderPage } from "@/pages/placeholder-page";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,24 +48,13 @@ export function App() {
                 <Route path="clients/:id" element={<ClientDetailPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
                 <Route path="projects/:id" element={<ProjectDetailPage />} />
-                <Route
-                  path="maintenance"
-                  element={<PlaceholderPage title="Maintenance" />}
-                />
-                <Route
-                  path="payments"
-                  element={<PlaceholderPage title="Payments" />}
-                />
+                <Route path="maintenance" element={<MaintenancePage />} />
+                <Route path="payments" element={<PaymentsPage />} />
+                <Route path="payments/:id" element={<PaymentDetailPage />} />
                 <Route path="expenses" element={<ExpensesPage />} />
                 <Route path="expenses/:id" element={<ExpenseDetailPage />} />
-                <Route
-                  path="notifications"
-                  element={<PlaceholderPage title="Notifications" />}
-                />
-                <Route
-                  path="reports"
-                  element={<PlaceholderPage title="Reports" />}
-                />
+                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="reports" element={<ReportsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
             </Route>

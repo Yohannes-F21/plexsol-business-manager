@@ -182,27 +182,46 @@ async function seed() {
   const templates = [
     {
       key: "subscription_reminder",
-      subject: "Subscription expiring: {{subscription_name}}",
+      subject: "Subscription reminder: {{subscription_name}}",
       bodyHtml:
-        "<p>The subscription <strong>{{subscription_name}}</strong> expires on {{expiration_date}}.</p>",
-      bodyText: "The subscription {{subscription_name}} expires on {{expiration_date}}.",
-      description: "Configurable subscription expiration reminder",
+        "<p>Hello,</p><p>This is a reminder that <strong>{{subscription_name}}</strong>" +
+        " ({{vendor}}) expires on <strong>{{expiration_date}}</strong>.</p>" +
+        "<p>Please renew before the expiration date to avoid service interruption.</p>" +
+        "<p>Regards,<br/>Plexsol Business Manager</p>",
+      bodyText:
+        "Reminder: {{subscription_name}} expires on {{expiration_date}}. Please renew before expiration.",
+      description: "Subscription expiration reminder (before, on day, or after)",
     },
     {
       key: "maintenance_due_reminder",
-      subject: "Maintenance payment due tomorrow",
+      subject: "Maintenance payment due tomorrow — {{project_name}}",
       bodyHtml:
-        "<p>Maintenance payment for <strong>{{project_name}}</strong> is due on {{due_date}}.</p>",
-      bodyText: "Maintenance payment for {{project_name}} is due on {{due_date}}.",
-      description: "Sent automatically one day before due date",
+        "<p>Dear {{client_name}},</p>" +
+        "<p>This is a professional reminder that the maintenance payment for " +
+        "<strong>{{project_name}}</strong> is due on <strong>{{due_date}}</strong>.</p>" +
+        "<p>Outstanding balance: <strong>{{outstanding}} {{currency_code}}</strong> " +
+        "(invoice amount {{amount}} {{currency_code}}).</p>" +
+        "<p>{{payment_instructions}}</p>" +
+        "<p>Thank you,<br/>Plexsol Business Manager</p>",
+      bodyText:
+        "Maintenance payment for {{project_name}} is due on {{due_date}}. " +
+        "Outstanding: {{outstanding}} {{currency_code}}. {{payment_instructions}}",
+      description: "Automatic email one day before due date when balance remains",
     },
     {
       key: "overdue_payment",
-      subject: "Overdue maintenance payment",
+      subject: "Overdue maintenance payment — {{project_name}}",
       bodyHtml:
-        "<p>Payment for <strong>{{project_name}}</strong> is overdue (due {{due_date}}).</p>",
-      bodyText: "Payment for {{project_name}} is overdue (due {{due_date}}).",
-      description: "Requires administrator approval before send",
+        "<p>Dear {{client_name}},</p>" +
+        "<p>Our records show that payment for <strong>{{project_name}}</strong> " +
+        "was due on <strong>{{due_date}}</strong> and remains outstanding.</p>" +
+        "<p>Outstanding balance: <strong>{{outstanding}} {{currency_code}}</strong>.</p>" +
+        "<p>{{payment_instructions}}</p>" +
+        "<p>Please arrange payment at your earliest convenience.</p>" +
+        "<p>Regards,<br/>Plexsol Business Manager</p>",
+      bodyText:
+        "Overdue: {{project_name}} was due {{due_date}}. Outstanding {{outstanding}} {{currency_code}}. {{payment_instructions}}",
+      description: "Draft only — requires administrator approval before send",
     },
   ];
   for (const template of templates) {
@@ -230,11 +249,22 @@ async function seed() {
   });
   await prisma.setting.upsert({
     where: { key: "subscription_reminder_days" },
-    update: { value: [30, 14, 7, 1] },
+    update: { value: [30, 7, 3, 1, 0] },
     create: {
       key: "subscription_reminder_days",
-      value: [30, 14, 7, 1],
-      description: "Default reminder offsets (days before expiration)",
+      value: [30, 7, 3, 1, 0],
+      description:
+        "Default reminder offsets in days before expiration (0 = on expiration day)",
+    },
+  });
+  await prisma.setting.upsert({
+    where: { key: "subscription_reminder_after_expiration_days" },
+    update: { value: [-1, -7] },
+    create: {
+      key: "subscription_reminder_after_expiration_days",
+      value: [-1, -7],
+      description:
+        "Configurable post-expiration reminder offsets (negative days relative to expiration)",
     },
   });
   await prisma.setting.upsert({
@@ -244,6 +274,19 @@ async function seed() {
       key: "email_max_attempts",
       value: 3,
       description: "Max delivery attempts including the first send",
+    },
+  });
+  await prisma.setting.upsert({
+    where: { key: "payment_instructions" },
+    update: {
+      value:
+        "Please transfer the outstanding balance to the account on file and include the project name as the payment reference.",
+    },
+    create: {
+      key: "payment_instructions",
+      value:
+        "Please transfer the outstanding balance to the account on file and include the project name as the payment reference.",
+      description: "Reusable payment instructions inserted into billing emails",
     },
   });
 

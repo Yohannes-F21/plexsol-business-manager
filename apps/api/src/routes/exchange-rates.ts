@@ -1,15 +1,21 @@
 import { Router } from "express";
 import { prisma, type Prisma } from "@plexsol/database";
-import { exchangeRateListQuerySchema, type ApiEnv } from "@plexsol/shared";
+import {
+  exchangeRateCreateSchema,
+  exchangeRateListQuerySchema,
+  type ApiEnv,
+} from "@plexsol/shared";
 import {
   asyncHandler,
   HttpError,
   paramId,
+  parseBody,
   parseQuery,
   decimalToString,
+  toDate,
 } from "../lib/http.js";
 import { requireBusinessAccess } from "../lib/roles.js";
-import { createRequireAuth } from "../middleware/auth.js";
+import { createRequireAuth, requireRole } from "../middleware/auth.js";
 
 export function createExchangeRatesRouter(env: ApiEnv): Router {
   const router = Router();
@@ -61,6 +67,85 @@ export function createExchangeRatesRouter(env: ApiEnv): Router {
           rate: decimalToString(item.rate),
         },
       });
+    }),
+  );
+
+  /**
+   * Insert a new historical rate snapshot. Never updates an existing row —
+   * uniqueness on (from, to, effectiveAt) preserves auditability.
+   */
+  router.post(
+    "/",
+    requireRole("ADMIN"),
+    asyncHandler(async (req, res) => {
+      const body = parseBody(exchangeRateCreateSchema, req.body);
+      const effectiveAt = toDate(body.effectiveAt);
+      if (!effectiveAt) {
+        throw new HttpError("effectiveAt is required", 400, "validation_error");
+      }
+
+      const [fromCurrency, toCurrency] = await Promise.all([
+        prisma.currency.findUnique({ where: { code: body.fromCurrencyCode } }),
+        prisma.currency.findUnique({ where: { code: body.toCurrencyCode } }),
+      ]);
+      if (!fromCurrency) {
+        throw new HttpError(
+          `Unknown currency ${body.fromCurrencyCode}`,
+          400,
+          "validation_error",
+        );
+      }
+      if (!toCurrency) {
+        throw new HttpError(
+          `Unknown currency ${body.toCurrencyCode}`,
+          400,
+          "validation_error",
+        );
+      }
+
+      try {
+        const item = await prisma.exchangeRate.create({
+          data: {
+            fromCurrencyCode: body.fromCurrencyCode,
+            toCurrencyCode: body.toCurrencyCode,
+            rate: body.rate,
+            effectiveAt,
+            source: body.source ?? "manual",
+          },
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            actorUserId: req.user!.id,
+            action: "CREATE",
+            entityType: "ExchangeRate",
+            entityId: item.id,
+            after: item,
+            reason: "Historical exchange rate snapshot",
+          },
+        });
+
+        res.status(201).json({
+          data: {
+            ...item,
+            rate: decimalToString(item.rate),
+          },
+        });
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code: string }).code === "P2002"
+        ) {
+          throw new HttpError(
+            "An exchange rate already exists for this currency pair and effectiveAt — insert a new effective date instead of overwriting",
+            409,
+            "conflict",
+          );
+        }
+        throw error;
+      }
     }),
   );
 

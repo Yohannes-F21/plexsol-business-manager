@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
+  cancelSubscriptionReminders,
   confirmSubscriptionRenewal,
   prisma,
+  scheduleSubscriptionRemindersFor,
   type Prisma,
 } from "@plexsol/database";
 import {
@@ -38,7 +40,7 @@ function mapRenewalHttpError(error: unknown): HttpError {
   }
 
   if (
-    /amountEtb or exchangeRateId|Exchange rate must|Missing system expense|positive/i.test(
+    /amountEtb or exchangeRateId|For ETB renewals|Exchange rate must|Missing system expense|positive/i.test(
       message,
     )
   ) {
@@ -139,12 +141,14 @@ export function createSubscriptionsRouter(env: ApiEnv): Router {
           startDate,
           expirationDate,
           status: body.status ?? "ACTIVE",
-          reminderDaysBefore: body.reminderDaysBefore ?? [30, 14, 7, 1],
+          reminderDaysBefore: body.reminderDaysBefore ?? [30, 7, 3, 1, 0],
           url: body.url ?? null,
           notes: body.notes,
         },
         include: { category: true },
       });
+
+      await scheduleSubscriptionRemindersFor(prisma, item.id);
 
       res.status(201).json({
         data: serializeSubscription(item as unknown as Record<string, unknown>),
@@ -184,6 +188,19 @@ export function createSubscriptionsRouter(env: ApiEnv): Router {
         },
         include: { category: true },
       });
+
+      const expirationChanged =
+        body.expirationDate !== undefined &&
+        existing.expirationDate.getTime() !== item.expirationDate.getTime();
+      const remindersChanged = body.reminderDaysBefore !== undefined;
+      const cancelled = body.status === "CANCELLED";
+
+      if (cancelled) {
+        await cancelSubscriptionReminders(prisma, item.id);
+      } else if (expirationChanged || remindersChanged) {
+        await cancelSubscriptionReminders(prisma, item.id);
+        await scheduleSubscriptionRemindersFor(prisma, item.id);
+      }
 
       res.json({
         data: serializeSubscription(item as unknown as Record<string, unknown>),

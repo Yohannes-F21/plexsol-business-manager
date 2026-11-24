@@ -38,3 +38,25 @@ export function serializeRenewal(row: Record<string, unknown>) {
   }
   return next;
 }
+
+export function serializeClientPayment(row: Record<string, unknown>) {
+  const next = serializeMoneyFields(row, ["amount", "amountEtb", "amountAllocated"]);
+  if (Array.isArray(next.allocations)) {
+    next.allocations = next.allocations.map((allocation) =>
+      serializeAllocation(allocation as Record<string, unknown>),
+    );
+  }
+  return next;
+}
+
+export function serializeAllocation(row: Record<string, unknown>) {
+  return serializeMoneyFields(row, ["amount"]);
+}
+
+export function serializeMaintenanceAgreement(row: Record<string, unknown>) {
+  return serializeMoneyFields(row, ["amount"]);
+}
+
+export function serializeBillingCycle(row: Record<string, unknown>) {
+  return serializeMoneyFields(row, ["amount", "amountAllocated"]);
+}
