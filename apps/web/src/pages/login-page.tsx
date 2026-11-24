@@ -66,9 +66,9 @@ export function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-[#0B0B0B] lg:flex lg:flex-col lg:justify-between lg:p-10">
-        <PlexsolLogo variant="official" className="h-12" />
+        <PlexsolLogo variant="official" className="h-14" />
         <div className="max-w-md space-y-3 text-white">
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="text-[32px] font-bold leading-10 tracking-tight">
             Plexsol Business Manager
           </h1>
           <p className="text-sm leading-relaxed text-white/70">
@@ -84,7 +84,7 @@ export function LoginPage() {
       </div>
 
       <div className="flex items-center justify-center bg-background p-6">
-        <Card className="w-full max-w-md border-border shadow-sm">
+        <Card className="w-full max-w-md border-border">
           <CardHeader className="space-y-4">
             <div className="lg:hidden">
               <PlexsolLogo variant="light" />
@@ -96,7 +96,7 @@ export function LoginPage() {
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <form className="space-y-4" onSubmit={onSubmit} noValidate>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

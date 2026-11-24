@@ -1,9 +1,22 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import {
+  CirclePause,
+  Eye,
+  FolderKanban,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import {
   projectCreateSchema,
   type ProjectCreateInput,
@@ -35,23 +48,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ClientsProjectsTabs } from "@/features/clients/clients-projects-tabs";
+import { SummaryCard } from "@/components/crud/summary-card";
 import { clientsApi } from "@/features/clients/api";
 import { ApiError } from "@/lib/api";
 import { formatDate, formatMoney, labelize, toDateInputValue } from "@/lib/format";
 import { projectsApi, type Project } from "./api";
 
-const statusVariant: Record<
+const projectStatusVariant: Record<
   Project["status"],
-  "default" | "success" | "warning" | "muted" | "danger"
+  "success" | "default" | "warning" | "muted"
 > = {
-  IN_PROGRESS: "default",
-  COMPLETED: "success",
+  IN_PROGRESS: "success",
+  COMPLETED: "default",
   ON_HOLD: "warning",
   CANCELLED: "muted",
 };
 
 export function ProjectsPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -69,6 +86,34 @@ export function ProjectsPage() {
         search: search || undefined,
         status: status === "all" ? undefined : status,
       }),
+  });
+
+  const countQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["projects", "count", "all"],
+        queryFn: () => projectsApi.list({ page: 1, pageSize: 1 }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["projects", "count", "IN_PROGRESS"],
+        queryFn: () =>
+          projectsApi.list({ page: 1, pageSize: 1, status: "IN_PROGRESS" }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["projects", "count", "COMPLETED"],
+        queryFn: () =>
+          projectsApi.list({ page: 1, pageSize: 1, status: "COMPLETED" }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["projects", "count", "ON_HOLD"],
+        queryFn: () =>
+          projectsApi.list({ page: 1, pageSize: 1, status: "ON_HOLD" }),
+        staleTime: 30_000,
+      },
+    ],
   });
 
   const clientsQuery = useQuery({
@@ -104,6 +149,7 @@ export function ProjectsPage() {
       setFormOpen(false);
       setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
     },
     onError: (error) => {
       setFormError(
@@ -141,6 +187,25 @@ export function ProjectsPage() {
     setFormOpen(true);
   };
 
+  useEffect(() => {
+    const state = location.state as { openCreate?: boolean } | null;
+    if (!state?.openCreate) return;
+    setEditing(null);
+    setFormError(null);
+    form.reset({
+      clientId: clientOptions[0]?.id ?? "",
+      name: "",
+      description: "",
+      status: "IN_PROGRESS",
+      agreedPrice: "",
+      currencyCode: "ETB",
+      startDate: "",
+      endDate: "",
+    });
+    setFormOpen(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [clientOptions, form, location.pathname, location.state, navigate]);
+
   const openEdit = (project: Project) => {
     setEditing(project);
     setFormError(null);
@@ -159,19 +224,60 @@ export function ProjectsPage() {
 
   const items = listQuery.data?.data ?? [];
   const meta = listQuery.data?.meta;
+  const totalProjects = countQueries[0]?.data?.meta.total ?? 0;
+  const inProgress = countQueries[1]?.data?.meta.total ?? 0;
+  const completed = countQueries[2]?.data?.meta.total ?? 0;
+  const onHold = countQueries[3]?.data?.meta.total ?? 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader
         title="Projects"
-        description="Track development work, agreed prices, and lifecycle status independently of payments."
+        description="Manage clients, development projects, and project financials."
         actions={
-          <Button type="button" onClick={openCreate}>
-            <Plus className="size-4" />
-            Add project
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild type="button" variant="outline">
+              <Link to="/clients" state={{ openCreate: true }}>
+                <Plus className="size-5" />
+                Add Client
+              </Link>
+            </Button>
+            <Button type="button" onClick={openCreate}>
+              <Plus className="size-5" />
+              Add Project
+            </Button>
+          </div>
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+        <SummaryCard
+          label="Total Projects"
+          value={totalProjects}
+          tone="primary"
+          icon={<FolderKanban className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="In Progress"
+          value={inProgress}
+          tone="success"
+          icon={<CheckCircle2 className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Completed"
+          value={completed}
+          tone="primary"
+          icon={<CheckCircle2 className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="On Hold"
+          value={onHold}
+          tone="warning"
+          icon={<CirclePause className="size-5" strokeWidth={1.75} />}
+        />
+      </div>
+
+      <ClientsProjectsTabs active="projects" />
 
       <ListToolbar
         search={search}
@@ -179,7 +285,7 @@ export function ProjectsPage() {
           setSearch(value);
           setPage(1);
         }}
-        searchPlaceholder="Search projects…"
+        searchPlaceholder="Search projects by name or client…"
         filters={
           <Select
             value={status}
@@ -189,7 +295,7 @@ export function ProjectsPage() {
             }}
             className="w-44"
           >
-            <option value="all">All statuses</option>
+            <option value="all">Status: All</option>
             <option value="IN_PROGRESS">In progress</option>
             <option value="COMPLETED">Completed</option>
             <option value="ON_HOLD">On hold</option>
@@ -208,63 +314,89 @@ export function ProjectsPage() {
           description="Create a project with an agreed development price."
           action={
             <Button type="button" onClick={openCreate}>
-              Add project
+              <Plus className="size-5" />
+              Add Project
             </Button>
           }
         />
       ) : (
-        <div className="space-y-4 rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-[var(--shadow-card)]">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Project</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-5 md:pl-6">Project</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Agreed price</TableHead>
+                <TableHead className="text-right">Agreed Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Dates</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="pr-5 text-right md:pr-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((project) => (
                 <TableRow key={project.id}>
-                  <TableCell>
+                  <TableCell className="pl-5 md:pl-6">
                     <Link
                       to={`/projects/${project.id}`}
-                      className="font-medium text-primary hover:underline"
+                      className="font-medium text-foreground transition-colors duration-150 hover:text-primary"
                     >
                       {project.name}
                     </Link>
                   </TableCell>
-                  <TableCell>{project.client?.name ?? "—"}</TableCell>
                   <TableCell>
+                    {project.client ? (
+                      <Link
+                        to={`/clients/${project.client.id}`}
+                        className="text-sm text-muted-foreground transition-colors duration-150 hover:text-primary"
+                      >
+                        {project.client.name}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
                     {formatMoney(project.agreedPrice, project.currencyCode)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant[project.status]}>
+                    <Badge variant={projectStatusVariant[project.status]}>
                       {labelize(project.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(project.startDate)} → {formatDate(project.endDate)}
+                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                    {formatDate(project.startDate)} →{" "}
+                    {formatDate(project.endDate)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                  <TableCell className="pr-5 text-right md:pr-6">
+                    <div className="flex justify-end gap-1">
                       <Button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEdit(project)}
+                        variant="ghost"
+                        size="icon"
+                        asChild
+                        aria-label={`View ${project.name}`}
                       >
-                        Edit
+                        <Link to={`/projects/${project.id}`}>
+                          <Eye className="size-5" strokeWidth={1.75} />
+                        </Link>
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        aria-label={`Edit ${project.name}`}
+                        onClick={() => openEdit(project)}
+                      >
+                        <Pencil className="size-5" strokeWidth={1.75} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${project.name}`}
                         onClick={() => setDeleting(project)}
                       >
-                        Delete
+                        <Trash2 className="size-5" strokeWidth={1.75} />
                       </Button>
                     </div>
                   </TableCell>
@@ -273,7 +405,7 @@ export function ProjectsPage() {
             </TableBody>
           </Table>
           {meta ? (
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-border px-4 py-3 md:px-6">
               <PaginationBar
                 page={meta.page}
                 pageSize={meta.pageSize}
@@ -337,7 +469,11 @@ export function ProjectsPage() {
                 htmlFor="agreedPrice"
                 error={form.formState.errors.agreedPrice?.message}
               >
-                <Input id="agreedPrice" {...form.register("agreedPrice")} />
+                <Input
+                  id="agreedPrice"
+                  className="tabular-nums"
+                  {...form.register("agreedPrice")}
+                />
               </FormField>
               <FormField
                 label="Currency"
@@ -372,11 +508,11 @@ export function ProjectsPage() {
               </FormField>
             </div>
             {formError ? (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p className="rounded-[10px] bg-danger-background px-3 py-2 text-sm text-danger">
                 {formError}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <Button
                 type="button"
                 variant="outline"
@@ -403,6 +539,7 @@ export function ProjectsPage() {
             : ""
         }
         loading={deleteMutation.isPending}
+        destructive
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
       />
     </div>

@@ -8,7 +8,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground shadow-sm",
+        "rounded-[14px] border border-border bg-card text-card-foreground shadow-[var(--shadow-card)]",
         className,
       )}
       {...props}
@@ -20,7 +20,9 @@ export function CardHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1.5 p-6", className)} {...props} />;
+  return (
+    <div className={cn("flex flex-col gap-1.5 p-5 md:p-6", className)} {...props} />
+  );
 }
 
 export function CardTitle({
@@ -29,7 +31,10 @@ export function CardTitle({
 }: React.ComponentProps<"h3">) {
   return (
     <h3
-      className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+      className={cn(
+        "text-base font-semibold leading-6 tracking-tight text-foreground",
+        className,
+      )}
       {...props}
     />
   );
@@ -40,7 +45,7 @@ export function CardDescription({
   ...props
 }: React.ComponentProps<"p">) {
   return (
-    <p className={cn("text-sm text-muted-foreground", className)} {...props} />
+    <p className={cn("text-sm leading-[22px] text-muted-foreground", className)} {...props} />
   );
 }
 
@@ -48,5 +53,5 @@ export function CardContent({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("p-6 pt-0", className)} {...props} />;
+  return <div className={cn("p-5 md:p-6", className)} {...props} />;
 }

@@ -45,3 +45,22 @@ export function labelize(value: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
+
+/** Whole calendar days from today (UTC date) until the given date. Display helper only. */
+export function daysUntil(value: string | Date | null | undefined): number | null {
+  if (!value) return null;
+  const target = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  const start = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate(),
+  );
+  const end = Date.UTC(
+    target.getUTCFullYear(),
+    target.getUTCMonth(),
+    target.getUTCDate(),
+  );
+  return Math.round((end - start) / 86_400_000);
+}

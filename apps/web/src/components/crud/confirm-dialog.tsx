@@ -15,6 +15,7 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel?: string;
   loading?: boolean;
+  destructive?: boolean;
   onConfirm: () => void;
 };
 
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = "Delete",
   loading,
+  destructive = false,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -43,7 +45,12 @@ export function ConfirmDialog({
           >
             Cancel
           </Button>
-          <Button type="button" onClick={onConfirm} disabled={loading}>
+          <Button
+            type="button"
+            variant={destructive ? "destructive" : "default"}
+            onClick={onConfirm}
+            disabled={loading}
+          >
             {loading ? <Spinner className="size-4" /> : null}
             {confirmLabel}
           </Button>

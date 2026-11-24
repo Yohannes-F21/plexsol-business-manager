@@ -1,7 +1,9 @@
+import { Link } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { cn } from "@/lib/utils";
 import { daysRemainingLabel, formatEtb } from "../format";
 import type { UpcomingRenewal } from "../types";
 
@@ -19,7 +21,7 @@ function VendorMark({
   if (vendorKey === "google") {
     return (
       <span
-        className="inline-flex size-9 items-center justify-center rounded-lg bg-white ring-1 ring-border"
+        className="inline-flex size-9 items-center justify-center rounded-[10px] bg-card ring-1 ring-border"
         aria-hidden
         title={name}
       >
@@ -48,7 +50,7 @@ function VendorMark({
   if (vendorKey === "github") {
     return (
       <span
-        className="inline-flex size-9 items-center justify-center rounded-lg bg-slate-950 text-white"
+        className="inline-flex size-9 items-center justify-center rounded-[10px] bg-slate-950 text-white"
         aria-hidden
         title={name}
       >
@@ -62,7 +64,7 @@ function VendorMark({
   if (vendorKey === "figma") {
     return (
       <span
-        className="inline-flex size-9 items-center justify-center rounded-lg bg-white ring-1 ring-border"
+        className="inline-flex size-9 items-center justify-center rounded-[10px] bg-card ring-1 ring-border"
         aria-hidden
         title={name}
       >
@@ -79,7 +81,7 @@ function VendorMark({
 
   return (
     <span
-      className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary"
+      className="inline-flex size-9 items-center justify-center rounded-[10px] bg-primary-subtle text-sm font-semibold text-primary"
       aria-hidden
       title={name}
     >
@@ -90,13 +92,19 @@ function VendorMark({
 
 export function SubscriptionRenewals({ renewals }: SubscriptionRenewalsProps) {
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">
+    <Card className="h-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-base font-semibold leading-6">
           Subscription Renewals (Next 30 Days)
         </CardTitle>
+        <Link
+          to="/subscriptions"
+          className="text-sm font-medium text-primary transition-colors duration-150 hover:text-primary-hover"
+        >
+          View All →
+        </Link>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pt-0">
         {renewals.length === 0 ? (
           <EmptyState
             title="No renewals in the next 30 days"
@@ -104,40 +112,60 @@ export function SubscriptionRenewals({ renewals }: SubscriptionRenewalsProps) {
             className="py-8"
           />
         ) : (
-          renewals.map((renewal) => (
-            <div
-              key={renewal.id}
-              className="flex items-center gap-3 rounded-lg border border-border/80 px-3 py-3"
-            >
-              <VendorMark vendorKey={renewal.vendorKey} name={renewal.name} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {renewal.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Expires {renewal.expiresOn} ·{" "}
-                  <span className="font-medium text-primary">
-                    {daysRemainingLabel(renewal.daysRemaining)}
-                  </span>
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold tabular-nums text-foreground">
-                  {formatEtb(renewal.amount)}
-                </p>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  / {renewal.billingPeriod === "yearly" ? "yr" : "mo"}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`${renewal.name} actions`}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </div>
-          ))
+          <ul className="divide-y divide-divider">
+            {renewals.map((renewal) => {
+              const urgent = renewal.daysRemaining <= 7;
+              return (
+                <li
+                  key={renewal.id}
+                  className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0"
+                >
+                  <VendorMark
+                    vendorKey={renewal.vendorKey}
+                    name={renewal.name}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/subscriptions/${renewal.id}`}
+                      className="truncate text-sm font-medium leading-5 text-foreground transition-colors duration-150 hover:text-primary"
+                    >
+                      {renewal.name}
+                    </Link>
+                    <p className="text-xs leading-[18px] text-muted-foreground">
+                      Expires {renewal.expiresOn} ·{" "}
+                      <span
+                        className={cn(
+                          "font-medium",
+                          urgent ? "text-danger" : "text-primary",
+                        )}
+                      >
+                        {daysRemainingLabel(renewal.daysRemaining)}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatEtb(renewal.amount)}
+                    </p>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      / {renewal.billingPeriod === "yearly" ? "yr" : "mo"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    asChild
+                    aria-label={`Open ${renewal.name}`}
+                  >
+                    <Link to={`/subscriptions/${renewal.id}`}>
+                      <MoreHorizontal className="size-5" />
+                    </Link>
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </CardContent>
     </Card>

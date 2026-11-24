@@ -1,9 +1,23 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, RefreshCw } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  Layers,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { z } from "zod";
 import {
   subscriptionCreateSchema,
@@ -14,6 +28,7 @@ import { FormField } from "@/components/crud/form-field";
 import { ListToolbar } from "@/components/crud/list-toolbar";
 import { PageHeader } from "@/components/crud/page-header";
 import { PaginationBar } from "@/components/crud/pagination-bar";
+import { SummaryCard } from "@/components/crud/summary-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +53,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { paymentMethodsApi } from "@/features/payment-methods/api";
 import { ApiError } from "@/lib/api";
-import { formatDate, formatMoney, labelize, toDateInputValue } from "@/lib/format";
+import {
+  daysUntil,
+  formatDate,
+  formatMoney,
+  labelize,
+  toDateInputValue,
+} from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   confirmRenewal,
   listExchangeRates,
@@ -65,7 +87,8 @@ const renewalFormSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["amountEtb"],
-        message: "Enter ETB amount or select an exchange rate for non-ETB renewals",
+        message:
+          "Enter ETB amount or select an exchange rate for non-ETB renewals",
       });
     }
   });
@@ -81,6 +104,24 @@ const statusVariant: Record<
   EXPIRED: "danger",
   CANCELLED: "muted",
 };
+
+const statusTabs = [
+  { id: "all", label: "All Subscriptions", value: "all" },
+  { id: "ACTIVE", label: "Active", value: "ACTIVE" },
+  { id: "EXPIRING_SOON", label: "Renewing Soon", value: "EXPIRING_SOON" },
+  { id: "EXPIRED", label: "Expired", value: "EXPIRED" },
+] as const;
+
+function ServiceMark({ name }: { name: string }) {
+  return (
+    <span
+      className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-subtle text-sm font-semibold text-primary"
+      aria-hidden
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
 
 export function SubscriptionsPage() {
   const queryClient = useQueryClient();
@@ -107,6 +148,45 @@ export function SubscriptionsPage() {
         categoryId: categoryId === "all" ? undefined : categoryId,
       }),
   });
+
+  const countQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["subscriptions", "count", "all"],
+        queryFn: () => subscriptionsApi.list({ page: 1, pageSize: 1 }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["subscriptions", "count", "ACTIVE"],
+        queryFn: () =>
+          subscriptionsApi.list({ page: 1, pageSize: 1, status: "ACTIVE" }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["subscriptions", "count", "EXPIRING_SOON"],
+        queryFn: () =>
+          subscriptionsApi.list({
+            page: 1,
+            pageSize: 1,
+            status: "EXPIRING_SOON",
+          }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["subscriptions", "count", "EXPIRED"],
+        queryFn: () =>
+          subscriptionsApi.list({ page: 1, pageSize: 1, status: "EXPIRED" }),
+        staleTime: 30_000,
+      },
+    ],
+  });
+
+  const counts = {
+    all: countQueries[0]?.data?.meta.total ?? 0,
+    ACTIVE: countQueries[1]?.data?.meta.total ?? 0,
+    EXPIRING_SOON: countQueries[2]?.data?.meta.total ?? 0,
+    EXPIRED: countQueries[3]?.data?.meta.total ?? 0,
+  };
 
   const categoriesQuery = useQuery({
     queryKey: ["subscription-categories"],
@@ -198,13 +278,9 @@ export function SubscriptionsPage() {
         amount: values.amount,
         currencyCode: currency,
         amountEtb:
-          currency === "ETB"
-            ? undefined
-            : values.amountEtb || undefined,
+          currency === "ETB" ? undefined : values.amountEtb || undefined,
         exchangeRateId:
-          currency === "ETB"
-            ? null
-            : values.exchangeRateId || null,
+          currency === "ETB" ? null : values.exchangeRateId || null,
         paymentMethodId: values.paymentMethodId || null,
         notes: values.notes || null,
       });
@@ -298,18 +374,89 @@ export function SubscriptionsPage() {
   const items = listQuery.data?.data ?? [];
   const meta = listQuery.data?.meta;
 
+  const tabCount = (value: string) => {
+    if (value === "all") return counts.all;
+    if (value === "ACTIVE") return counts.ACTIVE;
+    if (value === "EXPIRING_SOON") return counts.EXPIRING_SOON;
+    if (value === "EXPIRED") return counts.EXPIRED;
+    return 0;
+  };
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader
         title="Subscriptions"
-        description="Track vendor subscriptions, renewals, and expiration."
+        description="Manage software subscriptions, renewal dates, and related expenses."
         actions={
           <Button type="button" onClick={openCreate}>
-            <Plus className="size-4" />
-            Add subscription
+            <Plus className="size-5" />
+            Add Subscription
           </Button>
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+        <SummaryCard
+          label="Total Subscriptions"
+          value={counts.all}
+          tone="primary"
+          icon={<Layers className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Active"
+          value={counts.ACTIVE}
+          tone="success"
+          icon={<CheckCircle2 className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Renewing Soon"
+          value={counts.EXPIRING_SOON}
+          tone="warning"
+          icon={<CalendarClock className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Expired"
+          value={counts.EXPIRED}
+          tone="danger"
+          icon={<XCircle className="size-5" strokeWidth={1.75} />}
+        />
+      </div>
+
+      <div
+        role="tablist"
+        aria-label="Subscription status"
+        className="flex flex-wrap gap-1 border-b border-border"
+      >
+        {statusTabs.map((tab) => {
+          const active = status === tab.value;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => {
+                setStatus(tab.value);
+                setPage(1);
+              }}
+              className={cn(
+                "relative px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                active
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab.label}
+              <span className="ml-1.5 tabular-nums text-muted-foreground">
+                ({tabCount(tab.value)})
+              </span>
+              {active ? (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
 
       <ListToolbar
         search={search}
@@ -317,39 +464,23 @@ export function SubscriptionsPage() {
           setSearch(value);
           setPage(1);
         }}
-        searchPlaceholder="Search name or vendor…"
+        searchPlaceholder="Search subscription, software, or vendor…"
         filters={
-          <>
-            <Select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-              className="w-40"
-            >
-              <option value="all">All statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="EXPIRING_SOON">Expiring soon</option>
-              <option value="EXPIRED">Expired</option>
-              <option value="CANCELLED">Cancelled</option>
-            </Select>
-            <Select
-              value={categoryId}
-              onChange={(event) => {
-                setCategoryId(event.target.value);
-                setPage(1);
-              }}
-              className="w-44"
-            >
-              <option value="all">All categories</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </Select>
-          </>
+          <Select
+            value={categoryId}
+            onChange={(event) => {
+              setCategoryId(event.target.value);
+              setPage(1);
+            }}
+            className="w-44"
+          >
+            <option value="all">Category: All</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </Select>
         }
       />
 
@@ -363,87 +494,127 @@ export function SubscriptionsPage() {
           description="Add a subscription to track renewals and expenses."
           action={
             <Button type="button" onClick={openCreate}>
-              Add subscription
+              <Plus className="size-5" />
+              Add Subscription
             </Button>
           }
         />
       ) : (
-        <div className="space-y-4 rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-[var(--shadow-card)]">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-5 md:pl-6">Software / Service</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Expires</TableHead>
+                <TableHead>Renewal Date</TableHead>
+                <TableHead>Billing Cycle</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="pr-5 text-right md:pr-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <Link
-                      to={`/subscriptions/${item.id}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {item.name}
-                    </Link>
-                    {item.vendor ? (
-                      <p className="text-xs text-muted-foreground">
-                        {item.vendor}
+              {items.map((item) => {
+                const remaining = daysUntil(item.expirationDate);
+                const showCountdown =
+                  item.status === "EXPIRING_SOON" ||
+                  (remaining !== null && remaining <= 14 && remaining >= 0);
+
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="pl-5 md:pl-6">
+                      <div className="flex items-center gap-3">
+                        <ServiceMark name={item.name} />
+                        <div className="min-w-0">
+                          <Link
+                            to={`/subscriptions/${item.id}`}
+                            className="font-medium text-foreground transition-colors duration-150 hover:text-primary"
+                          >
+                            {item.name}
+                          </Link>
+                          {item.vendor ? (
+                            <p className="truncate text-xs leading-[18px] text-muted-foreground">
+                              {item.vendor}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.category?.name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <p className="tabular-nums text-foreground">
+                        {formatDate(item.expirationDate)}
                       </p>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{item.category?.name ?? "—"}</TableCell>
-                  <TableCell>
-                    {formatMoney(item.amount, item.currencyCode)}
-                    <p className="text-xs text-muted-foreground">
+                      {showCountdown && remaining !== null ? (
+                        <p
+                          className={cn(
+                            "text-xs font-medium leading-[18px]",
+                            remaining <= 7 ? "text-danger" : "text-primary",
+                          )}
+                        >
+                          {remaining === 0
+                            ? "Today"
+                            : remaining === 1
+                              ? "1 day"
+                              : `${remaining} days`}
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {labelize(item.billingPeriod)}
-                    </p>
-                  </TableCell>
-                  <TableCell>{formatDate(item.expirationDate)}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant[item.status]}>
-                      {labelize(item.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openRenew(item)}
-                      >
-                        <RefreshCw className="size-3.5" />
-                        Renew
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEdit(item)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeleting(item)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <p className="font-medium tabular-nums text-foreground">
+                        {formatMoney(item.amount, item.currencyCode)}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant[item.status]}>
+                        {item.status === "EXPIRING_SOON"
+                          ? "Renewing Soon"
+                          : labelize(item.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="pr-5 text-right md:pr-6">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Renew ${item.name}`}
+                          onClick={() => openRenew(item)}
+                        >
+                          <RefreshCw className="size-5" strokeWidth={1.75} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${item.name}`}
+                          onClick={() => openEdit(item)}
+                        >
+                          <Pencil className="size-5" strokeWidth={1.75} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${item.name}`}
+                          onClick={() => setDeleting(item)}
+                        >
+                          <Trash2 className="size-5" strokeWidth={1.75} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           {meta ? (
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-border px-4 py-3 md:px-6">
               <PaginationBar
                 page={meta.page}
                 pageSize={meta.pageSize}
@@ -510,7 +681,7 @@ export function SubscriptionsPage() {
                 htmlFor="amount"
                 error={form.formState.errors.amount?.message}
               >
-                <Input id="amount" {...form.register("amount")} />
+                <Input id="amount" className="tabular-nums" {...form.register("amount")} />
               </FormField>
               <FormField label="Currency" htmlFor="currencyCode">
                 <Input
@@ -566,11 +737,11 @@ export function SubscriptionsPage() {
               <Textarea id="notes" {...form.register("notes")} />
             </FormField>
             {formError ? (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p className="rounded-[10px] bg-danger-background px-3 py-2 text-sm text-danger">
                 {formError}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <Button
                 type="button"
                 variant="outline"
@@ -592,8 +763,9 @@ export function SubscriptionsPage() {
           <DialogHeader>
             <DialogTitle>Confirm renewal</DialogTitle>
             <DialogDescription>
-              Records the payment, creates the renewal expense, updates
-              expiration, and cancels obsolete reminders.
+              {renewing
+                ? `Renew ${renewing.name}. Records the payment, creates the renewal expense, updates expiration, and cancels obsolete reminders.`
+                : "Records the payment, creates the renewal expense, updates expiration, and cancels obsolete reminders."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -632,7 +804,11 @@ export function SubscriptionsPage() {
                 htmlFor="renewAmount"
                 error={renewForm.formState.errors.amount?.message}
               >
-                <Input id="renewAmount" {...renewForm.register("amount")} />
+                <Input
+                  id="renewAmount"
+                  className="tabular-nums"
+                  {...renewForm.register("amount")}
+                />
               </FormField>
               <FormField label="Currency" htmlFor="renewCurrency">
                 <Input
@@ -650,7 +826,11 @@ export function SubscriptionsPage() {
                   error={renewForm.formState.errors.amountEtb?.message}
                   hint="Required for non-ETB renewals unless you pick a rate"
                 >
-                  <Input id="amountEtb" {...renewForm.register("amountEtb")} />
+                  <Input
+                    id="amountEtb"
+                    className="tabular-nums"
+                    {...renewForm.register("amountEtb")}
+                  />
                 </FormField>
                 <FormField
                   label="Exchange rate"
@@ -690,11 +870,11 @@ export function SubscriptionsPage() {
               <Textarea id="renewNotes" {...renewForm.register("notes")} />
             </FormField>
             {renewError ? (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p className="rounded-[10px] bg-danger-background px-3 py-2 text-sm text-danger">
                 {renewError}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <Button
                 type="button"
                 variant="outline"
@@ -723,6 +903,7 @@ export function SubscriptionsPage() {
             : ""
         }
         loading={deleteMutation.isPending}
+        destructive
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
       />
     </div>

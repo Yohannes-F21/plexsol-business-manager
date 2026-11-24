@@ -27,44 +27,50 @@ export function KpiCard({ kpi }: KpiCardProps) {
   const Icon = iconById[kpi.id];
 
   return (
-    <Card className="shadow-sm">
-      <CardContent className="space-y-4 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
-          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-4" />
+    <Card className="h-full">
+      <CardContent className="flex h-full flex-col justify-center gap-4 p-6 pt-6 md:p-6 md:pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-sm font-medium leading-5 text-muted-foreground">
+            {kpi.label}
+          </p>
+          <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-[12px] bg-primary-subtle text-primary">
+            <Icon className="size-5" strokeWidth={1.75} />
           </span>
         </div>
 
-        <div>
-          <p className="text-2xl font-semibold tracking-tight text-foreground">
+        <div className="space-y-2">
+          <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums text-foreground">
             {formatEtb(kpi.value)}
             {kpi.suffix ? (
-              <span className="ml-1 text-base font-medium text-muted-foreground">
+              <span className="ml-1 whitespace-nowrap text-base font-medium text-muted-foreground">
                 {kpi.suffix}
               </span>
             ) : null}
           </p>
           {kpi.footnote ? (
-            <p className="mt-1 text-xs text-muted-foreground">{kpi.footnote}</p>
+            <p className="text-xs leading-[18px] text-muted-foreground">
+              {kpi.footnote}
+            </p>
           ) : null}
         </div>
 
         {kpi.trend ? (
           <div
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium",
+              "inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium leading-[18px]",
               kpi.trend.sentiment === "positive" &&
-                "bg-emerald-50 text-emerald-700",
-              kpi.trend.sentiment === "negative" && "bg-red-50 text-red-700",
-              kpi.trend.sentiment === "neutral" && "bg-muted text-muted-foreground",
+                "bg-success-background text-success",
+              kpi.trend.sentiment === "negative" &&
+                "bg-danger-background text-danger",
+              kpi.trend.sentiment === "neutral" &&
+                "bg-muted text-muted-foreground",
             )}
           >
             {kpi.trend.direction === "up" ? (
-              <ArrowUpRight className="size-3.5" />
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
             ) : null}
             {kpi.trend.direction === "down" ? (
-              <ArrowDownRight className="size-3.5" />
+              <ArrowDownRight className="size-3.5" aria-hidden="true" />
             ) : null}
             <span>
               {kpi.trend.label}{" "}

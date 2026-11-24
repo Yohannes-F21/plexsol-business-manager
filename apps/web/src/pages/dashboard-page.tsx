@@ -45,7 +45,7 @@ export function DashboardPage() {
 
       <KpiCards kpis={data.kpis} />
 
-      <div className="grid gap-4 xl:grid-cols-5">
+      <div className="grid gap-4 xl:grid-cols-5 xl:gap-5">
         <div className="xl:col-span-3">
           <FinancialOverviewChart data={data.monthlyOverview} />
         </div>
@@ -56,7 +56,7 @@ export function DashboardPage() {
 
       <StatusSummaryCards summaries={data.summaries} />
 
-      <div className="grid gap-4 xl:grid-cols-5">
+      <div className="grid gap-4 xl:grid-cols-5 xl:gap-5">
         <div className="xl:col-span-3">
           <RecentTransactions transactions={data.recentTransactions} />
         </div>

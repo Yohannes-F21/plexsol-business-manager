@@ -3,11 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { PageHeader } from "@/components/crud/page-header";
 import { FormField } from "@/components/crud/form-field";
+import { PageHeader } from "@/components/crud/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -104,6 +105,7 @@ export function PaymentDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: ["balances", payment?.clientId],
       });
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
     },
     onError: (err) => {
       setError(err instanceof ApiError ? err.message : "Allocation failed");
@@ -121,10 +123,15 @@ export function PaymentDetailPage() {
   if (!payment) {
     return (
       <div className="mx-auto max-w-4xl space-y-4">
-        <p className="text-sm text-muted-foreground">Payment not found.</p>
-        <Button asChild variant="outline">
-          <Link to="/payments">Back to payments</Link>
-        </Button>
+        <EmptyState
+          title="Payment not found"
+          description="It may have been deleted or the link is invalid."
+          action={
+            <Button asChild variant="outline">
+              <Link to="/payments">Back to payments</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -133,56 +140,70 @@ export function PaymentDetailPage() {
     0,
     Number(payment.amount) - Number(payment.amountAllocated),
   );
+  const receiptLabel =
+    payment.reference?.trim() ||
+    `RCPT-${payment.id.slice(0, 8).toUpperCase()}`;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
+      <div className="flex items-start gap-3">
+        <Button asChild variant="ghost" size="icon" className="mt-1 shrink-0">
           <Link to="/payments" aria-label="Back to payments">
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-5" strokeWidth={1.75} />
           </Link>
         </Button>
         <PageHeader
-          title={`Payment · ${formatMoney(payment.amount, payment.currencyCode)}`}
-          description={payment.client?.name ?? "Client payment"}
+          title={receiptLabel}
+          description={`${payment.client?.name ?? "Client payment"} · ${formatMoney(payment.amount, payment.currencyCode)}`}
           actions={
             <Badge variant={unapplied > 0 ? "warning" : "success"}>
               {unapplied > 0
-                ? `${formatMoney(String(unapplied), payment.currencyCode)} unapplied`
-                : "Fully applied"}
+                ? `${formatMoney(String(unapplied), payment.currencyCode)} unallocated`
+                : "Fully allocated"}
             </Badge>
           }
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 xl:gap-5">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Receipt</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Receipt
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            <p>{formatDate(payment.paidAt)}</p>
-            <p className="text-muted-foreground">
-              {payment.reference ?? "No reference"}
+          <CardContent className="space-y-1 pt-0">
+            <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums">
+              {formatMoney(payment.amount, payment.currencyCode)}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {formatDate(payment.paidAt)}
+              {payment.paymentMethod?.name
+                ? ` · ${payment.paymentMethod.name}`
+                : ""}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Allocated</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Allocated
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
+          <CardContent className="pt-0">
+            <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums">
               {formatMoney(payment.amountAllocated, payment.currencyCode)}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">ETB snapshot</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              ETB snapshot
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
+          <CardContent className="pt-0">
+            <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums">
               {formatMoney(payment.amountEtb, "ETB")}
             </p>
           </CardContent>
@@ -191,40 +212,44 @@ export function PaymentDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Allocations</CardTitle>
+          <CardTitle className="text-base font-semibold">Allocations</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {(payment.allocations?.length ?? 0) === 0 ? (
             <p className="text-sm text-muted-foreground">
               No allocations yet. Apply this receipt to one or more obligations.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payment.allocations?.map((allocation) => (
-                  <TableRow key={allocation.id}>
-                    <TableCell>
-                      {allocation.project
-                        ? `Project · ${allocation.project.name}`
-                        : allocation.billingCycle
-                          ? `Cycle · ${formatDate(allocation.billingCycle.periodStart)} – ${formatDate(allocation.billingCycle.periodEnd)}`
-                          : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {formatMoney(allocation.amount, payment.currencyCode)}
-                    </TableCell>
-                    <TableCell>{allocation.notes ?? "—"}</TableCell>
+            <div className="overflow-hidden rounded-[14px] border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="pl-5">Target</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead className="pr-5">Notes</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {payment.allocations?.map((allocation) => (
+                    <TableRow key={allocation.id}>
+                      <TableCell className="pl-5 font-medium">
+                        {allocation.project
+                          ? `Project · ${allocation.project.name}`
+                          : allocation.billingCycle
+                            ? `Cycle · ${formatDate(allocation.billingCycle.periodStart)} – ${formatDate(allocation.billingCycle.periodEnd)}`
+                            : "—"}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatMoney(allocation.amount, payment.currencyCode)}
+                      </TableCell>
+                      <TableCell className="pr-5 text-muted-foreground">
+                        {allocation.notes ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -232,9 +257,11 @@ export function PaymentDetailPage() {
       {unapplied > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Allocate receipt</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Allocate receipt
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <form
               className="space-y-4"
               onSubmit={form.handleSubmit((values) => {
@@ -247,7 +274,7 @@ export function PaymentDetailPage() {
                 return (
                   <div
                     key={field.id}
-                    className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1.4fr_1fr_auto]"
+                    className="grid gap-3 rounded-[14px] border border-border bg-muted/30 p-4 sm:grid-cols-[1fr_1.4fr_1fr_auto]"
                   >
                     <FormField label="Type" htmlFor={`type-${index}`}>
                       <Select
@@ -304,7 +331,7 @@ export function PaymentDetailPage() {
                         onClick={() => remove(index)}
                         aria-label="Remove line"
                       >
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-5" strokeWidth={1.75} />
                       </Button>
                     </div>
                   </div>
@@ -323,7 +350,7 @@ export function PaymentDetailPage() {
                     })
                   }
                 >
-                  <Plus className="size-4" />
+                  <Plus className="size-5" />
                   Add line
                 </Button>
                 <Button type="submit" disabled={allocateMutation.isPending}>
@@ -346,42 +373,60 @@ export function PaymentDetailPage() {
       {balances ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Client outstanding</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              Client outstanding
+            </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid gap-6 md:grid-cols-2 pt-0">
             <div>
-              <h3 className="mb-2 text-sm font-medium">Projects</h3>
-              <ul className="space-y-2 text-sm">
-                {balances.projects.map((project) => (
-                  <li
-                    key={project.projectId}
-                    className="flex justify-between gap-3"
-                  >
-                    <span>{project.name}</span>
-                    <span>
-                      {formatMoney(project.outstanding, project.currencyCode)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+                Projects
+              </h3>
+              {balances.projects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No project balances.</p>
+              ) : (
+                <ul className="space-y-2.5 text-sm">
+                  {balances.projects.map((project) => (
+                    <li
+                      key={project.projectId}
+                      className="flex justify-between gap-3"
+                    >
+                      <span className="font-medium text-foreground">
+                        {project.name}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatMoney(project.outstanding, project.currencyCode)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-medium">Billing cycles</h3>
-              <ul className="space-y-2 text-sm">
-                {balances.billingCycles.map((cycle) => (
-                  <li
-                    key={cycle.cycleId}
-                    className="flex justify-between gap-3"
-                  >
-                    <span>
-                      {cycle.projectName} · {formatDate(cycle.dueDate)}
-                    </span>
-                    <span>
-                      {formatMoney(cycle.outstanding, cycle.currencyCode)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+                Billing cycles
+              </h3>
+              {balances.billingCycles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No billing cycle balances.
+                </p>
+              ) : (
+                <ul className="space-y-2.5 text-sm">
+                  {balances.billingCycles.map((cycle) => (
+                    <li
+                      key={cycle.cycleId}
+                      className="flex justify-between gap-3"
+                    >
+                      <span className="font-medium text-foreground">
+                        {cycle.projectName} · {formatDate(cycle.dueDate)}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatMoney(cycle.outstanding, cycle.currencyCode)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </CardContent>
         </Card>

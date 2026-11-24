@@ -1,9 +1,21 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import {
+  CircleDollarSign,
+  Eye,
+  PieChart,
+  Plus,
+  Receipt,
+  Wallet,
+} from "lucide-react";
 import {
   clientPaymentCreateSchema,
   type ClientPaymentCreateInput,
@@ -12,6 +24,8 @@ import { FormField } from "@/components/crud/form-field";
 import { ListToolbar } from "@/components/crud/list-toolbar";
 import { PageHeader } from "@/components/crud/page-header";
 import { PaginationBar } from "@/components/crud/pagination-bar";
+import { SummaryCard } from "@/components/crud/summary-card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,10 +49,32 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { clientsApi } from "@/features/clients/api";
 import { paymentMethodsApi } from "@/features/payment-methods/api";
+import { fetchReport } from "@/features/reports/api";
 import { listExchangeRates } from "@/features/subscriptions/api";
 import { ApiError } from "@/lib/api";
 import { formatDate, formatMoney, toDateInputValue } from "@/lib/format";
-import { paymentsApi } from "./api";
+import { paymentsApi, type ClientPayment } from "./api";
+
+function currentMonthId() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function allocationState(payment: ClientPayment) {
+  const amount = Number(payment.amount);
+  const allocated = Number(payment.amountAllocated);
+  if (allocated <= 0) {
+    return { label: "Unallocated", variant: "danger" as const, unallocated: amount };
+  }
+  if (allocated + 0.0001 < amount) {
+    return {
+      label: "Partial",
+      variant: "warning" as const,
+      unallocated: Math.max(0, amount - allocated),
+    };
+  }
+  return { label: "Allocated", variant: "success" as const, unallocated: 0 };
+}
 
 export function PaymentsPage() {
   const queryClient = useQueryClient();
@@ -57,6 +93,27 @@ export function PaymentsPage() {
         search: search || undefined,
         clientId: clientFilter === "all" ? undefined : clientFilter,
       }),
+  });
+
+  const kpiQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["payments", "count", "all"],
+        queryFn: () => paymentsApi.list({ page: 1, pageSize: 1 }),
+        staleTime: 30_000,
+      },
+      {
+        queryKey: ["payments", "kpi", "sample"],
+        queryFn: () => paymentsApi.list({ page: 1, pageSize: 100 }),
+        staleTime: 30_000,
+      },
+    ],
+  });
+
+  const reportQuery = useQuery({
+    queryKey: ["reports", "payments-kpi", currentMonthId()],
+    queryFn: () => fetchReport({ preset: "month", month: currentMonthId() }),
+    staleTime: 60_000,
   });
 
   const clientsQuery = useQuery({
@@ -115,6 +172,7 @@ export function PaymentsPage() {
     onSuccess: async () => {
       setFormOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await queryClient.invalidateQueries({ queryKey: ["reports"] });
     },
     onError: (error) => {
       setFormError(
@@ -131,35 +189,113 @@ export function PaymentsPage() {
   const items = listQuery.data?.data ?? [];
   const meta = listQuery.data?.meta;
 
+  const totalReceipts = kpiQueries[0]?.data?.meta.total ?? 0;
+  const allocationTotals = useMemo(() => {
+    const sample = kpiQueries[1]?.data?.data ?? [];
+    let allocatedEtb = 0;
+    let unallocatedEtb = 0;
+    for (const payment of sample) {
+      const allocated = Number(payment.amountAllocated);
+      const amount = Number(payment.amount);
+      const unallocated = Math.max(0, amount - allocated);
+      // Prefer ETB snapshot when present for cross-currency receipts.
+      const scale =
+        payment.currencyCode === "ETB" || !Number(payment.amountEtb)
+          ? 1
+          : Number(payment.amountEtb) / Math.max(amount, Number.EPSILON);
+      allocatedEtb += allocated * scale;
+      unallocatedEtb += unallocated * scale;
+    }
+    return {
+      allocatedEtb,
+      unallocatedEtb,
+      sampleSize: sample.length,
+      truncated: (kpiQueries[1]?.data?.meta.total ?? 0) > sample.length,
+    };
+  }, [kpiQueries]);
+
+  const outstanding =
+    reportQuery.data?.data?.totals.outstandingClientsEtb ?? null;
+  const periodIncome = reportQuery.data?.data?.totals.incomeEtb ?? null;
+  const periodLabel = reportQuery.data?.data?.period.label ?? "This period";
+
+  const openCreate = () => {
+    setFormError(null);
+    form.reset({
+      clientId: clients[0]?.id ?? "",
+      amount: "",
+      currencyCode: "ETB",
+      amountEtb: "",
+      exchangeRateId: null,
+      paymentMethodId: null,
+      paidAt: toDateInputValue(new Date()),
+      reference: "",
+      notes: "",
+    });
+    setFormOpen(true);
+  };
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader
         title="Payments"
-        description="Record receipts once, then allocate across projects and maintenance cycles."
+        description="Client receipts, allocations, and balances."
         actions={
-          <Button
-            type="button"
-            onClick={() => {
-              setFormError(null);
-              form.reset({
-                clientId: clients[0]?.id ?? "",
-                amount: "",
-                currencyCode: "ETB",
-                amountEtb: "",
-                exchangeRateId: null,
-                paymentMethodId: null,
-                paidAt: toDateInputValue(new Date()),
-                reference: "",
-                notes: "",
-              });
-              setFormOpen(true);
-            }}
-          >
-            <Plus className="size-4" />
-            Record payment
+          <Button type="button" onClick={openCreate}>
+            <Plus className="size-5" />
+            New Receipt
           </Button>
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+        <SummaryCard
+          label={`Receipts (${periodLabel})`}
+          value={
+            periodIncome !== null ? formatMoney(periodIncome, "ETB") : "—"
+          }
+          tone="primary"
+          hint={`${totalReceipts} recorded receipt${totalReceipts === 1 ? "" : "s"}`}
+          icon={<Receipt className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Allocated"
+          value={formatMoney(
+            allocationTotals.allocatedEtb.toFixed(2),
+            "ETB",
+          )}
+          tone="success"
+          hint={
+            allocationTotals.truncated
+              ? `From latest ${allocationTotals.sampleSize} receipts`
+              : undefined
+          }
+          icon={<PieChart className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Unallocated"
+          value={formatMoney(
+            allocationTotals.unallocatedEtb.toFixed(2),
+            "ETB",
+          )}
+          tone="warning"
+          hint={
+            allocationTotals.truncated
+              ? `From latest ${allocationTotals.sampleSize} receipts`
+              : undefined
+          }
+          icon={<CircleDollarSign className="size-5" strokeWidth={1.75} />}
+        />
+        <SummaryCard
+          label="Outstanding Balances"
+          value={
+            outstanding !== null ? formatMoney(outstanding, "ETB") : "—"
+          }
+          tone="danger"
+          hint="Across clients (ETB)"
+          icon={<Wallet className="size-5" strokeWidth={1.75} />}
+        />
+      </div>
 
       <ListToolbar
         search={search}
@@ -167,7 +303,7 @@ export function PaymentsPage() {
           setSearch(value);
           setPage(1);
         }}
-        searchPlaceholder="Search reference or notes…"
+        searchPlaceholder="Search reference, notes, or client…"
         filters={
           <Select
             value={clientFilter}
@@ -195,67 +331,97 @@ export function PaymentsPage() {
         <EmptyState
           title="No payments yet"
           description="Record a client receipt, then allocate it to obligations."
+          action={
+            <Button type="button" onClick={openCreate}>
+              <Plus className="size-5" />
+              New Receipt
+            </Button>
+          }
         />
       ) : (
-        <div className="space-y-4 rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-[var(--shadow-card)]">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Payment</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-5 md:pl-6">Date</TableHead>
+                <TableHead>Receipt</TableHead>
+                <TableHead>Client</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Unapplied</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Reference</TableHead>
+                <TableHead>Allocated</TableHead>
+                <TableHead>Unallocated</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="pr-5 text-right md:pr-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((payment) => {
-                const unapplied =
-                  Number(payment.amount) - Number(payment.amountAllocated);
-                const amountLabel = formatMoney(
-                  payment.amount,
-                  payment.currencyCode,
-                );
+                const state = allocationState(payment);
+                const receiptLabel =
+                  payment.reference?.trim() ||
+                  `RCPT-${payment.id.slice(0, 8).toUpperCase()}`;
                 return (
                   <TableRow key={payment.id}>
+                    <TableCell className="pl-5 text-sm tabular-nums text-muted-foreground md:pl-6">
+                      {formatDate(payment.paidAt)}
+                    </TableCell>
                     <TableCell>
                       <Link
                         to={`/payments/${payment.id}`}
-                        className="font-medium text-primary hover:underline"
+                        className="font-medium text-foreground transition-colors duration-150 hover:text-primary"
                       >
-                        {amountLabel}
-                        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                          {payment.client?.name ?? "Unknown client"} ·{" "}
-                          {formatDate(payment.paidAt)}
-                          {payment.reference
-                            ? ` · ${payment.reference}`
-                            : ""}
-                        </span>
+                        {receiptLabel}
                       </Link>
                     </TableCell>
-                    <TableCell>
-                      {amountLabel}
+                    <TableCell className="font-medium text-foreground">
+                      {payment.client?.name ?? "Unknown client"}
+                    </TableCell>
+                    <TableCell className="tabular-nums font-medium">
+                      {formatMoney(payment.amount, payment.currencyCode)}
                       {payment.currencyCode !== "ETB" ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs font-normal text-muted-foreground">
                           {formatMoney(payment.amountEtb, "ETB")}
                         </p>
                       ) : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">
                       {formatMoney(
-                        unapplied > 0 ? String(unapplied) : "0",
+                        payment.amountAllocated,
                         payment.currencyCode,
                       )}
                     </TableCell>
-                    <TableCell>{formatDate(payment.paidAt)}</TableCell>
-                    <TableCell>{payment.reference ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums font-medium">
+                      {formatMoney(
+                        String(state.unallocated),
+                        payment.currencyCode,
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {payment.paymentMethod?.name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={state.variant}>{state.label}</Badge>
+                    </TableCell>
+                    <TableCell className="pr-5 text-right md:pr-6">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        asChild
+                        aria-label={`View ${receiptLabel}`}
+                      >
+                        <Link to={`/payments/${payment.id}`}>
+                          <Eye className="size-5" strokeWidth={1.75} />
+                        </Link>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
           {meta ? (
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-border px-4 py-3 md:px-6">
               <PaginationBar
                 page={meta.page}
                 pageSize={meta.pageSize}

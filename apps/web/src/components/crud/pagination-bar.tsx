@@ -16,12 +16,15 @@ export function PaginationBar({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (total <= pageSize) return null;
 
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
   return (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm text-muted-foreground">
-        Page {page} of {totalPages} · {total} total
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm leading-5 text-muted-foreground">
+        Showing {from}–{to} of {total}
       </p>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="outline"
@@ -31,6 +34,9 @@ export function PaginationBar({
         >
           Previous
         </Button>
+        <span className="min-w-16 text-center text-sm font-medium tabular-nums text-foreground">
+          {page} / {totalPages}
+        </span>
         <Button
           type="button"
           variant="outline"

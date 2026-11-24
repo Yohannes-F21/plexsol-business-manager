@@ -1,10 +1,11 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { PageHeader } from "@/components/crud/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -16,6 +17,16 @@ import {
 } from "@/components/ui/table";
 import { formatMoney, labelize } from "@/lib/format";
 import { clientsApi } from "./api";
+
+const projectStatusVariant: Record<
+  string,
+  "success" | "default" | "warning" | "muted"
+> = {
+  IN_PROGRESS: "success",
+  COMPLETED: "default",
+  ON_HOLD: "warning",
+  CANCELLED: "muted",
+};
 
 export function ClientDetailPage() {
   const { id = "" } = useParams();
@@ -37,20 +48,25 @@ export function ClientDetailPage() {
   if (!client) {
     return (
       <div className="mx-auto max-w-4xl space-y-4">
-        <p className="text-sm text-muted-foreground">Client not found.</p>
-        <Button asChild variant="outline">
-          <Link to="/clients">Back to clients</Link>
-        </Button>
+        <EmptyState
+          title="Client not found"
+          description="It may have been deleted or the link is invalid."
+          action={
+            <Button asChild variant="outline">
+              <Link to="/clients">Back to clients</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon">
+      <div className="flex items-start gap-3">
+        <Button asChild variant="ghost" size="icon" className="mt-1 shrink-0">
           <Link to="/clients" aria-label="Back to clients">
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-5" strokeWidth={1.75} />
           </Link>
         </Button>
         <PageHeader
@@ -64,32 +80,44 @@ export function ClientDetailPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 xl:gap-5">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Contact</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Contact
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>{client.email ?? "No email"}</p>
-            <p className="text-muted-foreground">{client.phone ?? "No phone"}</p>
+          <CardContent className="space-y-2 text-sm pt-0">
+            <p className="flex items-center gap-2 text-foreground">
+              <Mail className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+              {client.email ?? "No email"}
+            </p>
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <Phone className="size-3.5" strokeWidth={1.75} />
+              {client.phone ?? "No phone"}
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Projects</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Projects
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
+          <CardContent className="pt-0">
+            <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums">
               {client._count?.projects ?? client.projects?.length ?? 0}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Payments</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Payments
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
+          <CardContent className="pt-0">
+            <p className="text-[28px] font-bold leading-9 tracking-tight tabular-nums">
               {client._count?.payments ?? 0}
             </p>
           </CardContent>
@@ -98,11 +126,11 @@ export function ClientDetailPage() {
 
       {client.notes ? (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Notes</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold">Notes</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          <CardContent className="pt-0">
+            <p className="whitespace-pre-wrap text-sm leading-[22px] text-muted-foreground">
               {client.notes}
             </p>
           </CardContent>
@@ -110,34 +138,59 @@ export function ClientDetailPage() {
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Projects</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold leading-6">
+            Projects
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0 pb-2 sm:px-0 pt-0">
           {(client.projects?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">No projects yet.</p>
+            <div className="px-5 md:px-6">
+              <EmptyState
+                title="No projects yet"
+                description="Create a project for this client from the Projects page."
+                className="py-10"
+                action={
+                  <Button asChild variant="outline">
+                    <Link to="/projects" state={{ openCreate: true }}>
+                      Add Project
+                    </Link>
+                  </Button>
+                }
+              />
+            </div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-5 md:pl-6">Name</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Agreed price</TableHead>
+                  <TableHead className="pr-5 text-right md:pr-6">
+                    Agreed price
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {client.projects?.map((project) => (
                   <TableRow key={project.id}>
-                    <TableCell>
+                    <TableCell className="pl-5 md:pl-6">
                       <Link
                         to={`/projects/${project.id}`}
-                        className="font-medium text-primary hover:underline"
+                        className="font-medium text-foreground transition-colors duration-150 hover:text-primary"
                       >
                         {project.name}
                       </Link>
                     </TableCell>
-                    <TableCell>{labelize(project.status)}</TableCell>
                     <TableCell>
+                      <Badge
+                        variant={
+                          projectStatusVariant[project.status] ?? "muted"
+                        }
+                      >
+                        {labelize(project.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="pr-5 text-right font-medium tabular-nums md:pr-6">
                       {formatMoney(project.agreedPrice, project.currencyCode)}
                     </TableCell>
                   </TableRow>

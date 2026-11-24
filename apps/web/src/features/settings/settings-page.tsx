@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Plus } from "lucide-react";
+import {
+  Banknote,
+  Bell,
+  FolderTree,
+  Layers,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
+import { PlexsolLogo } from "@/components/brand/plexsol-logo";
 import { ConfirmDialog } from "@/components/crud/confirm-dialog";
 import { FormField } from "@/components/crud/form-field";
 import { PageHeader } from "@/components/crud/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +60,22 @@ type Tab =
   | "exchange-rates"
   | "ops";
 
+const settingsNav: Array<{
+  id: Tab;
+  label: string;
+  icon: typeof Banknote;
+}> = [
+  { id: "payment-methods", label: "Payment methods", icon: Banknote },
+  { id: "expense-categories", label: "Expense categories", icon: FolderTree },
+  {
+    id: "subscription-categories",
+    label: "Subscription categories",
+    icon: Layers,
+  },
+  { id: "exchange-rates", label: "Currencies & rates", icon: RefreshCw },
+  { id: "ops", label: "Reminders & email", icon: Bell },
+];
+
 function slugify(value: string) {
   return value
     .trim()
@@ -63,43 +88,72 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("payment-methods");
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader
         title="Settings"
         description="Reference data for payment methods, categories, and historical exchange rates."
       />
 
-      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
-        {(
-          [
-            ["payment-methods", "Payment methods"],
-            ["expense-categories", "Expense categories"],
-            ["subscription-categories", "Subscription categories"],
-            ["exchange-rates", "Exchange rates"],
-            ["ops", "Reminders & email"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={cn(
-              "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              tab === id && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-            )}
+      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_240px]">
+        <aside className="space-y-3">
+          <nav
+            aria-label="Settings sections"
+            className="rounded-[14px] border border-border bg-card p-2 shadow-[var(--shadow-card)]"
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            {settingsNav.map((item) => {
+              const Icon = item.icon;
+              const selected = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-sm font-medium transition-colors duration-150",
+                    selected
+                      ? "bg-primary-subtle text-primary"
+                      : "text-muted-foreground hover:bg-hover-surface hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-5 shrink-0" strokeWidth={1.75} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-      {tab === "payment-methods" ? <PaymentMethodsPanel /> : null}
-      {tab === "expense-categories" ? <ExpenseCategoriesPanel /> : null}
-      {tab === "subscription-categories" ? (
-        <SubscriptionCategoriesPanel />
-      ) : null}
-      {tab === "exchange-rates" ? <ExchangeRatesPanel /> : null}
-      {tab === "ops" ? <OpsSettingsPanel /> : null}
+        <div className="min-w-0 space-y-6">
+          {tab === "payment-methods" ? <PaymentMethodsPanel /> : null}
+          {tab === "expense-categories" ? <ExpenseCategoriesPanel /> : null}
+          {tab === "subscription-categories" ? (
+            <SubscriptionCategoriesPanel />
+          ) : null}
+          {tab === "exchange-rates" ? <ExchangeRatesPanel /> : null}
+          {tab === "ops" ? <OpsSettingsPanel /> : null}
+        </div>
+
+        <aside className="hidden xl:block">
+          <Card className="sticky top-6">
+            <CardContent className="space-y-4 p-5">
+              <PlexsolLogo variant="light" className="h-10 max-w-[168px]" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Plexsol Business Manager
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Version 0.1.0
+                </p>
+              </div>
+              <Badge variant="success">Up to date</Badge>
+              <p className="text-xs leading-[18px] text-muted-foreground">
+                Configure reference data used across subscriptions, billing, and
+                reporting. Admin-only fields stay read-only for other roles.
+              </p>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -174,12 +228,14 @@ function OpsSettingsPanel() {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+    <div className="space-y-5 rounded-[14px] border border-border bg-card p-5 shadow-[var(--shadow-card)] md:p-6">
       <div>
-        <h2 className="text-lg font-semibold">Reminders & payment instructions</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Defaults used when a subscription has no per-subscription override. Negative
-          after-expiration offsets are days after expiry.
+        <h2 className="text-lg font-semibold tracking-tight">
+          Reminders & payment instructions
+        </h2>
+        <p className="mt-1 text-sm leading-[22px] text-muted-foreground">
+          Defaults used when a subscription has no per-subscription override.
+          Negative after-expiration offsets are days after expiry.
         </p>
       </div>
       {error ? (
@@ -212,15 +268,20 @@ function OpsSettingsPanel() {
         />
       </FormField>
       {isAdmin ? (
-        <Button
-          type="button"
-          disabled={saveMutation.isPending}
-          onClick={() => saveMutation.mutate()}
-        >
-          Save
-        </Button>
+        <div className="flex justify-end border-t border-border pt-4">
+          <Button
+            type="button"
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? <Spinner className="size-4" /> : null}
+            Save Changes
+          </Button>
+        </div>
       ) : (
-        <p className="text-xs text-muted-foreground">Only administrators can edit these settings.</p>
+        <p className="text-xs text-muted-foreground">
+          Only administrators can edit these settings.
+        </p>
       )}
     </div>
   );
@@ -860,10 +921,10 @@ function ReferencePanel({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         <Button type="button" onClick={onAdd}>
-          <Plus className="size-4" />
+          <Plus className="size-5" />
           Add
         </Button>
       </div>
@@ -872,7 +933,9 @@ function ReferencePanel({
           <Spinner className="size-8" />
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card">{children}</div>
+        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-[var(--shadow-card)]">
+          {children}
+        </div>
       )}
     </div>
   );

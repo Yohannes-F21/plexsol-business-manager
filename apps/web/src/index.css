@@ -1,32 +1,71 @@
 @import "tailwindcss";
 
-/* Plexsol brand + shadcn/ui theme tokens */
+/*
+  Plexsol design tokens — calibrated from official logo (~#FD6418)
+  and approved light-sidebar reference screenshots.
+*/
 :root {
-  --background: 40 20% 97%;
-  --foreground: 0 0% 10%;
+  /* Surfaces */
+  --background: 220 20% 98%; /* #F8F9FB */
+  --foreground: 220 39% 11%; /* #111827 */
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 10%;
+  --card-foreground: 220 39% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 10%;
-  --primary: 16 88% 54%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 40 10% 94%;
-  --secondary-foreground: 0 0% 15%;
-  --muted: 40 10% 94%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 16 88% 96%;
-  --accent-foreground: 16 88% 40%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 16 88% 54%;
-  --radius: 0.75rem;
+  --popover-foreground: 220 39% 11%;
 
-  /* Brand aliases */
-  --plexsol-orange: #f15a24;
-  --plexsol-charcoal: #1a1a1a;
-  --plexsol-off-white: #f7f7f5;
+  /* Brand primary — #FF6500 */
+  --primary: 24 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 24 100% 45%; /* #E85B00 */
+  --primary-pressed: 24 100% 40%; /* #CC5000 */
+  --primary-subtle: 24 100% 95%; /* #FFF0E6 */
+  --primary-border: 24 100% 87%; /* #FFD9BF */
+
+  /* Neutrals */
+  --secondary: 220 14% 96%; /* #F5F6F8 hover-adjacent */
+  --secondary-foreground: 220 39% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 215 16% 47%; /* #64748B */
+  --accent: 24 100% 95%; /* soft orange surface */
+  --accent-foreground: 24 100% 40%;
+  --destructive: 0 72% 51%; /* #DC2626 */
+  --destructive-foreground: 0 0% 100%;
+  --border: 225 16% 92%; /* #E7E9EF */
+  --input: 225 16% 92%;
+  --ring: 24 100% 50%;
+  --divider: 228 11% 95%; /* #F0F1F4 */
+  --hover-surface: 220 14% 96%; /* #F5F6F8 */
+
+  /* Semantic */
+  --success: 142 64% 29%; /* #15803D */
+  --success-foreground: 142 64% 29%;
+  --success-background: 142 76% 93%; /* #DCFCE7 */
+  --warning: 32 95% 37%; /* #B45309 */
+  --warning-foreground: 32 95% 37%;
+  --warning-background: 48 96% 89%; /* #FEF3C7 */
+  --danger: 0 72% 51%;
+  --danger-background: 0 93% 94%; /* #FEE2E2 */
+
+  /* Geometry */
+  --radius: 0.875rem; /* 14px cards */
+  --radius-control: 0.625rem; /* 10px inputs/buttons */
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgb(17 24 39 / 0.04), 0 1px 3px rgb(17 24 39 / 0.06);
+  --shadow-dialog: 0 10px 30px rgb(17 24 39 / 0.12);
+
+  /* Brand aliases (hex for charts / non-HSL consumers) */
+  --plexsol-orange: #ff6500;
+  --plexsol-orange-hover: #e85b00;
+  --plexsol-orange-pressed: #cc5000;
+  --plexsol-orange-subtle: #fff0e6;
+  --plexsol-orange-border: #ffd9bf;
+  --plexsol-charcoal: #111827;
+  --plexsol-secondary-text: #475569;
+  --plexsol-muted: #64748b;
+  --plexsol-border: #e7e9ef;
+  --plexsol-off-white: #f8f9fb;
+  --plexsol-peach: #ffd9bf;
 }
 
 @theme inline {
@@ -38,6 +77,10 @@
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-primary-pressed: hsl(var(--primary-pressed));
+  --color-primary-subtle: hsl(var(--primary-subtle));
+  --color-primary-border: hsl(var(--primary-border));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
@@ -49,11 +92,29 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --color-divider: hsl(var(--divider));
+  --color-hover-surface: hsl(var(--hover-surface));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-background: hsl(var(--success-background));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-background: hsl(var(--warning-background));
+  --color-danger: hsl(var(--danger));
+  --color-danger-background: hsl(var(--danger-background));
+
+  --radius-sm: 0.5rem; /* 8px */
+  --radius-md: 0.625rem; /* 10px */
+  --radius-lg: var(--radius); /* 14px */
+  --radius-xl: 1rem; /* 16px */
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /*
+    Do NOT override --spacing-* here. In Tailwind v4 those tokens drive
+    h-*, p-*, gap-*, etc. Setting --spacing-16: 16px collapses h-16 to 16px
+    and breaks the sidebar header / logo / page padding.
+  */
 }
 
 @layer base {
@@ -69,5 +130,22 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Tabular numerals for financial / date-heavy UIs */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
